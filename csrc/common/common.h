@@ -17,11 +17,41 @@
 #include <stdint.h>
 
 //------------------------------------------------------------------------
-// ROCm 7.x warp-sync compatibility: all mask params must be 64-bit.
+// ROCm warp-sync compatibility.
+// RDNA (wave32): cast mask to 64-bit.
+// CDNA (wave64): half-wavefront emulation via __lane_id().
 
 #if defined(__HIP_PLATFORM_AMD__) && (defined(__CUDACC__) || defined(__HIPCC__))
 #ifndef NVDR_HIP_WARP_COMPAT_DEFINED
 #define NVDR_HIP_WARP_COMPAT_DEFINED
+
+#if __AMDGCN_WAVEFRONT_SIZE == 64
+
+namespace _nvdr_hip_warp {
+static __device__ __forceinline__ int _half()
+{ return __lane_id() >> 5; }
+static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
+{
+    unsigned long long full = ::__ballot(pred);
+    return ((unsigned int)(full >> (_half() * 32))) & mask;
+}
+static __device__ __forceinline__ bool all_sync(unsigned int mask, int pred)
+{ return ballot_sync(mask, pred) == mask; }
+static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
+{ return ballot_sync(mask, pred) != 0; }
+static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
+{
+    unsigned long long full = __match_any_sync(0xFFFFFFFFFFFFFFFFULL, val);
+    return ((unsigned int)(full >> (_half() * 32))) & mask;
+}
+static __device__ __forceinline__ void syncwarp_nomask()
+{ __syncwarp(); }
+static __device__ __forceinline__ void syncwarp_mask(unsigned int /*mask*/)
+{ __syncwarp(); }
+}
+
+#else // wave32 (RDNA)
+
 namespace _nvdr_hip_warp {
 static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
 { return (unsigned int)__ballot_sync((unsigned long long)mask, pred); }
@@ -36,6 +66,9 @@ static __device__ __forceinline__ void syncwarp_nomask()
 static __device__ __forceinline__ void syncwarp_mask(unsigned int mask)
 { __syncwarp((unsigned long long)mask); }
 }
+
+#endif // __AMDGCN_WAVEFRONT_SIZE
+
 #define __ballot_sync(mask, pred)       _nvdr_hip_warp::ballot_sync((unsigned int)(mask), (int)(pred))
 #define __all_sync(mask, pred)          _nvdr_hip_warp::all_sync((unsigned int)(mask), (int)(pred))
 #define __any_sync(mask, pred)          _nvdr_hip_warp::any_sync((unsigned int)(mask), (int)(pred))

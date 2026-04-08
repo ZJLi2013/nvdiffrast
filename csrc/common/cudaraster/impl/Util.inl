@@ -26,12 +26,27 @@ __device__ __inline__ S64   combineLoHi             (S32 lo, S32 hi)        { re
 #define HIP_ENABLE_WARP_SYNC_BUILTINS
 #endif
 
+#if __AMDGCN_WAVEFRONT_SIZE == 64
+// CDNA (wave64): lane masks must be relative to the 32-thread logical warp,
+// not the full 64-lane wavefront.  Compute from threadIdx.x directly.
+__device__ __inline__ U32   getLaneMaskLt           (void)                  { return (1u << threadIdx.x) - 1; }
+__device__ __inline__ U32   getLaneMaskLe           (void)                  { return (2u << threadIdx.x) - 1; }
+__device__ __inline__ U32   getLaneMaskGt           (void)                  { return ~((2u << threadIdx.x) - 1); }
+__device__ __inline__ U32   getLaneMaskGe           (void)                  { return ~((1u << threadIdx.x) - 1); }
+__device__ __inline__ int   findLeadingOne          (U32 v)                 { return (v == 0) ? (int)~0u : 31 - __clz(v); }
+__device__ __inline__ bool  singleLane              (void)                  {
+    U32 half = (U32)(::__ballot(true) >> ((__lane_id() >> 5) * 32));
+    return (half & getLaneMaskLt()) == 0;
+}
+#else
+// RDNA (wave32): native 32-bit lane masks.
 __device__ __inline__ U32   getLaneMaskLt           (void)                  { return (U32)__lanemask_lt(); }
 __device__ __inline__ U32   getLaneMaskLe           (void)                  { return ~(U32)__lanemask_gt(); }
 __device__ __inline__ U32   getLaneMaskGt           (void)                  { return (U32)__lanemask_gt(); }
 __device__ __inline__ U32   getLaneMaskGe           (void)                  { return ~(U32)__lanemask_lt(); }
 __device__ __inline__ int   findLeadingOne          (U32 v)                 { return (v == 0) ? (int)~0u : 31 - __clz(v); }
 __device__ __inline__ bool  singleLane              (void)                  { return ((::__ballot(true) & getLaneMaskLt()) == 0); }
+#endif
 
 __device__ __inline__ void  add_add_carry           (U32& rlo, U32 alo, U32 blo, U32& rhi, U32 ahi, U32 bhi) { U64 r = combineLoHi(alo, ahi) + combineLoHi(blo, bhi); rlo = getLo(r); rhi = getHi(r); }
 __device__ __inline__ S32   f32_to_s32_sat          (F32 a)                 { F32 c = rintf(a); if (c <= -2147483648.f) return (S32)0x80000000; if (c >= 2147483647.f) return 0x7FFFFFFF; return (S32)c; }
