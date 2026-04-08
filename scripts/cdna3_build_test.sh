@@ -100,7 +100,40 @@ tex_out = dr.texture(tex, uv)
 print(f"texture: {list(tex_out.shape)}", flush=True)
 ' && echo "PASS" || echo "FAIL"
 
-echo "=== TEST 6: antialias forward + backward (wave64 ballot + match_any) ==="
+echo "=== TEST 6a: interpolate backward only ==="
+python3 -c '
+import torch, sys; sys.stdout.reconfigure(line_buffering=True)
+import nvdiffrast.torch as dr
+
+glctx = dr.RasterizeCudaContext()
+vertices = torch.tensor([
+    [-0.5, -0.5, 0.0, 1.0],
+    [ 0.5, -0.5, 0.0, 1.0],
+    [ 0.0,  0.5, 0.0, 1.0],
+], dtype=torch.float32, device="cuda").unsqueeze(0)
+triangles = torch.tensor([[0, 1, 2]], dtype=torch.int32, device="cuda")
+vertex_colors = torch.tensor([[
+    [1.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
+]], dtype=torch.float32, device="cuda").requires_grad_(True)
+
+print("rasterize...", flush=True)
+rast_out, _ = dr.rasterize(glctx, vertices, triangles, resolution=[256, 256])
+print(f"rasterize non-zero: {(rast_out[...,3]>0).sum().item()}", flush=True)
+
+print("interpolate fwd...", flush=True)
+color, _ = dr.interpolate(vertex_colors, rast_out, triangles)
+print(f"interpolate: {list(color.shape)}", flush=True)
+
+print("interpolate bwd...", flush=True)
+loss = color.sum()
+loss.backward()
+torch.cuda.synchronize()
+print(f"interpolate bwd OK, grad: {vertex_colors.grad.abs().sum().item():.4f}", flush=True)
+' && echo "PASS" || echo "FAIL"
+
+echo "=== TEST 6b: antialias fwd + bwd (uniform color, workCount likely 0) ==="
 python3 -c '
 import torch, sys; sys.stdout.reconfigure(line_buffering=True)
 import nvdiffrast.torch as dr
@@ -122,15 +155,14 @@ aa_out = dr.antialias(color, rast_out, vertices, triangles)
 torch.cuda.synchronize()
 print(f"antialias fwd: {list(aa_out.shape)}", flush=True)
 
-print("antialias bwd (gradient)...", flush=True)
+print("antialias bwd...", flush=True)
 loss = aa_out.sum()
 loss.backward()
 torch.cuda.synchronize()
-grad = vertices.grad
-print(f"antialias bwd OK, grad shape: {list(grad.shape)}, grad abs sum: {grad.abs().sum().item():.6f}", flush=True)
+print(f"antialias bwd OK, grad abs sum: {vertices.grad.abs().sum().item():.6f}", flush=True)
 ' && echo "PASS" || echo "FAIL"
 
-echo "=== TEST 7: full pipeline (rasterize + interpolate + antialias grad) ==="
+echo "=== TEST 6c: antialias fwd + bwd (varying color, exercises grad kernel) ==="
 python3 -c '
 import torch, sys; sys.stdout.reconfigure(line_buffering=True)
 import nvdiffrast.torch as dr
@@ -142,28 +174,24 @@ vertices = torch.tensor([
     [ 0.0,  0.5, 0.0, 1.0],
 ], dtype=torch.float32, device="cuda").unsqueeze(0).requires_grad_(True)
 triangles = torch.tensor([[0, 1, 2]], dtype=torch.int32, device="cuda")
-vertex_colors = torch.tensor([[
-    [1.0, 0.0, 0.0],
-    [0.0, 1.0, 0.0],
-    [0.0, 0.0, 1.0],
-]], dtype=torch.float32, device="cuda")
 
 print("rasterize...", flush=True)
 rast_out, _ = dr.rasterize(glctx, vertices, triangles, resolution=[256, 256])
-print(f"rasterize: non-zero={(rast_out[...,3]>0).sum().item()}", flush=True)
 
-print("interpolate...", flush=True)
-color, _ = dr.interpolate(vertex_colors, rast_out, triangles)
-print(f"interpolate: {list(color.shape)}", flush=True)
+# Varying color based on rast_out barycentrics
+color = rast_out[..., :3].contiguous().detach()
+print(f"color range: [{color.min().item():.3f}, {color.max().item():.3f}]", flush=True)
 
-print("antialias...", flush=True)
+print("antialias fwd...", flush=True)
 aa_out = dr.antialias(color, rast_out, vertices, triangles)
+torch.cuda.synchronize()
+print(f"antialias fwd OK: {list(aa_out.shape)}", flush=True)
 
-print("backward...", flush=True)
+print("antialias bwd (this exercises the grad kernel with actual work)...", flush=True)
 loss = aa_out.sum()
 loss.backward()
 torch.cuda.synchronize()
-print(f"full pipeline OK, grad abs sum: {vertices.grad.abs().sum().item():.6f}", flush=True)
+print(f"antialias bwd OK, grad abs sum: {vertices.grad.abs().sum().item():.6f}", flush=True)
 ' && echo "PASS" || echo "FAIL"
 
 echo "=== ALL DONE ==="
