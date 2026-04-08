@@ -7,6 +7,8 @@
 // license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 #pragma once
+#ifndef NVDIFFRAST_CR_CONSTANTS_HPP
+#define NVDIFFRAST_CR_CONSTANTS_HPP
 
 //------------------------------------------------------------------------
 
@@ -71,3 +73,4 @@
 #define CR_DEPTH_MAX                (CR_U32_MAX - CR_LERP_ERROR(3))
 
 //------------------------------------------------------------------------
+#endif // NVDIFFRAST_CR_CONSTANTS_HPP

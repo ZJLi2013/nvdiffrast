@@ -17,14 +17,26 @@
 #include <stdint.h>
 
 //------------------------------------------------------------------------
-// HIP compatibility: ROCm 7.x requires 64-bit mask for __ballot_sync.
+// ROCm 7.x warp-sync compatibility: all mask params must be 64-bit.
 
 #if defined(__HIP_PLATFORM_AMD__) && (defined(__CUDACC__) || defined(__HIPCC__))
-static __device__ __forceinline__ unsigned int nvdr_ballot_sync(unsigned int mask, int pred)
-{
-    return (unsigned int)__ballot_sync((unsigned long long)mask, pred);
+#ifndef NVDR_HIP_WARP_COMPAT_DEFINED
+#define NVDR_HIP_WARP_COMPAT_DEFINED
+namespace _nvdr_hip_warp {
+static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
+{ return (unsigned int)__ballot_sync((unsigned long long)mask, pred); }
+static __device__ __forceinline__ bool all_sync(unsigned int mask, int pred)
+{ return __all_sync((unsigned long long)mask, pred); }
+static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
+{ return __any_sync((unsigned long long)mask, pred); }
+static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
+{ return (unsigned int)__match_any_sync((unsigned long long)mask, val); }
 }
-#define __ballot_sync(mask, pred) nvdr_ballot_sync((unsigned int)(mask), (int)(pred))
+#define __ballot_sync(mask, pred)       _nvdr_hip_warp::ballot_sync((unsigned int)(mask), (int)(pred))
+#define __all_sync(mask, pred)          _nvdr_hip_warp::all_sync((unsigned int)(mask), (int)(pred))
+#define __any_sync(mask, pred)          _nvdr_hip_warp::any_sync((unsigned int)(mask), (int)(pred))
+#define __match_any_sync(mask, val)     _nvdr_hip_warp::match_any_sync((unsigned int)(mask), (val))
+#endif
 #endif
 
 //------------------------------------------------------------------------
@@ -212,7 +224,7 @@ static __device__ __forceinline__ float triidx_to_float(int x)   { if (x <= 0x01
 //------------------------------------------------------------------------
 // Coalesced atomics. These are all done via macros.
 
-#if __CUDA_ARCH__ >= 700 // Warp match instruction __match_any_sync() is only available on compute capability 7.x and higher
+#if __CUDA_ARCH__ >= 700 || defined(__HIP_DEVICE_COMPILE__)
 
 #define CA_TEMP       _ca_temp
 #define CA_TEMP_PARAM float* CA_TEMP
@@ -260,7 +272,7 @@ static __device__ __forceinline__ float triidx_to_float(int x)   { if (x <= 0x01
 //------------------------------------------------------------------------
 // Disable atomic coalescing for compute capability lower than 7.x
 
-#else // __CUDA_ARCH__ >= 700
+#else
 #define CA_TEMP _ca_temp
 #define CA_TEMP_PARAM float CA_TEMP
 #define CA_DECLARE_TEMP(threads_per_block) CA_TEMP_PARAM
@@ -274,7 +286,7 @@ static __device__ __forceinline__ float triidx_to_float(int x)   { if (x <= 0x01
         atomicAdd((ptr)+3, (w));        \
     } while(0)
 #define caAtomicAddTexture(ptr, level, idx, value) atomicAdd((ptr)+(idx), (value))
-#endif // __CUDA_ARCH__ >= 700
+#endif
 
 //------------------------------------------------------------------------
 #endif // __CUDACC__ || __HIPCC__

@@ -47,6 +47,12 @@ if IS_HIP:
     archs = os.getenv("GPU_ARCHS", "native").split(";")
     nvcc_flags += [f"--offload-arch={arch}" for arch in archs]
 
+include_dirs = []
+if IS_HIP:
+    include_dirs += [
+        os.path.join(os.path.dirname(__file__), "csrc", "common", "cudaraster", "impl"),
+    ]
+
 setuptools.setup(
     ext_modules=[
         CUDAExtension(
@@ -68,6 +74,7 @@ setuptools.setup(
                 "csrc/torch/torch_rasterize.cpp",
                 "csrc/torch/torch_texture.cpp",
             ],
+            include_dirs=include_dirs,
             extra_compile_args={
                 "cxx": cxx_flags,
                 "nvcc": nvcc_flags,

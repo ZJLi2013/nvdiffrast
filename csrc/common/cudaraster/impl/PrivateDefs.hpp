@@ -7,6 +7,8 @@
 // license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 #pragma once
+#ifndef NVDIFFRAST_CR_PRIVATEDEFS_HPP
+#define NVDIFFRAST_CR_PRIVATEDEFS_HPP
 #include "Defs.hpp"
 #include "Constants.hpp"
 
@@ -151,3 +153,5 @@ struct CRParams
 
 //------------------------------------------------------------------------
 }
+
+#endif // NVDIFFRAST_CR_PRIVATEDEFS_HPP

@@ -7,6 +7,8 @@
 // license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 #pragma once
+#ifndef NVDIFFRAST_CR_DEFS_HPP
+#define NVDIFFRAST_CR_DEFS_HPP
 
 #if defined(__HIP_PLATFORM_AMD__)
 #   ifndef HIP_ENABLE_WARP_SYNC_BUILTINS
@@ -20,23 +22,36 @@
 #include <cstdint>
 
 //------------------------------------------------------------------------
-// HIP compatibility shims (must be before namespace CR).
+// ROCm 7.x warp-sync compatibility: all mask params must be 64-bit.
+// Wrapper functions are defined BEFORE the macros so their bodies
+// call the real ROCm builtins; the macros then intercept all later
+// call sites in this translation unit.
 
 #if defined(__HIP_PLATFORM_AMD__) && (defined(__CUDACC__) || defined(__HIPCC__))
 
-static __device__ __forceinline__ void __syncwarp()                  { __builtin_amdgcn_wave_barrier(); }
-static __device__ __forceinline__ void __syncwarp(unsigned int mask) { __builtin_amdgcn_wave_barrier(); }
+#ifndef NVDR_HIP_WARP_COMPAT_DEFINED
+#define NVDR_HIP_WARP_COMPAT_DEFINED
 
-#ifndef NVDR_BALLOT_SYNC_DEFINED
-#define NVDR_BALLOT_SYNC_DEFINED
-static __device__ __forceinline__ unsigned int nvdr_cr_ballot_sync(unsigned int mask, int pred)
-{
-    return (unsigned int)__ballot_sync((unsigned long long)mask, pred);
+namespace _nvdr_hip_warp {
+static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
+{ return (unsigned int)__ballot_sync((unsigned long long)mask, pred); }
+
+static __device__ __forceinline__ bool all_sync(unsigned int mask, int pred)
+{ return __all_sync((unsigned long long)mask, pred); }
+
+static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
+{ return __any_sync((unsigned long long)mask, pred); }
+
+static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
+{ return (unsigned int)__match_any_sync((unsigned long long)mask, val); }
 }
-#undef __ballot_sync
-#define __ballot_sync(mask, pred) nvdr_cr_ballot_sync((unsigned int)(mask), (int)(pred))
-#endif
 
+#define __ballot_sync(mask, pred)       _nvdr_hip_warp::ballot_sync((unsigned int)(mask), (int)(pred))
+#define __all_sync(mask, pred)          _nvdr_hip_warp::all_sync((unsigned int)(mask), (int)(pred))
+#define __any_sync(mask, pred)          _nvdr_hip_warp::any_sync((unsigned int)(mask), (int)(pred))
+#define __match_any_sync(mask, val)     _nvdr_hip_warp::match_any_sync((unsigned int)(mask), (val))
+
+#endif // NVDR_HIP_WARP_COMPAT_DEFINED
 #endif // __HIP_PLATFORM_AMD__
 
 namespace CR
@@ -117,3 +132,5 @@ public:
 
 //------------------------------------------------------------------------
 } // namespace CR
+
+#endif // NVDIFFRAST_CR_DEFS_HPP

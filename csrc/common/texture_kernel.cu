@@ -12,7 +12,7 @@
 #if defined(__HIP_PLATFORM_AMD__)
 static __device__ __forceinline__ float nvdr_frcp_rz(float x)
 {
-    return (x == 0.f) ? 0.f : __builtin_amdgcn_rcp_f32(x);
+    return (x == 0.f) ? 0.f : (1.0f / x);
 }
 #else
 static __device__ __forceinline__ float nvdr_frcp_rz(float x)

@@ -16,9 +16,13 @@
 #ifdef NVDR_TORCH
 #if !defined(__CUDACC__) && !defined(__HIPCC__)
 #include <torch/extension.h>
+#if defined(__HIP_PLATFORM_AMD__) || defined(USE_ROCM)
+#include <ATen/hip/HIPContext.h>
+#else
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/cuda/CUDAUtils.h>
 #include <c10/cuda/CUDAGuard.h>
+#endif
 #include <pybind11/numpy.h>
 #endif
 #define NVDR_CHECK(COND, ERR) do { TORCH_CHECK(COND, ERR) } while(0)
