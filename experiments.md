@@ -6,7 +6,7 @@
 |-----|------|---------|------|----------|------|
 | Exp-1 | nvdiffrast 可在 RDNA4 (RX 9700) + ROCm 上编译安装 | gfx1201 (wave32) | ✅ done | — | — |
 | Exp-2 | 基础功能在 RDNA4 上测试通过 | gfx1201 (wave32) | ✅ done | 全 4 模块 PASS | ROCm 7.2.1 + PyTorch 2.9.1 验证 |
-| Exp-3 | 半wavefront模拟使 cudaraster 在 CDNA3 wave64 上正确运行 | gfx942 (wave64) | 🔶 进行中 | — | — |
+| Exp-3 | 半wavefront模拟使 cudaraster 在 CDNA3 wave64 上正确运行 | gfx942 (wave64) | ✅ done | 全 8 项 PASS (含 cudaraster + antialias grad) | MI308XHF, ROCm 7.2.1 + PyTorch 2.9.1 |
 
 ---
 
@@ -373,10 +373,12 @@ wave64；使用 `__lane_id() >> 5` 判断当前线程在哪半个 wavefront，�
 | `__syncwarp(mask)` | partial sync | `__syncwarp()` (full wave) | ✅ (更强) |
 
 ### 环境
-- **节点**: banff-sc-cs41-29.dh170.dcgpu (MI300X, gfx942, wave64)
+- **节点**: banff-sc-cs41-29.dh170.dcgpu (MI308XHF, gfx942, wave64)
 - **Docker**: `rocm/pytorch:rocm7.2.1_ubuntu24.04_py3.12_pytorch_release_2.9.1`
+- **ROCm**: 7.2.1 (hipcc 7.2.53211)
+- **PyTorch**: 2.9.1+rocm7.2.1
 - **编译**: `GPU_ARCHS=gfx942 pip install . --no-build-isolation`
-- **测试脚本**: 同 Exp-2
+- **测试脚本**: `scripts/cdna3_build_test.sh`
 
 ### 预期
 - 编译通过，无 warp/ballot 相关错误
@@ -384,11 +386,43 @@ wave64；使用 `__lane_id() >> 5` 判断当前线程在哪半个 wavefront，�
 - `dr.RasterizeCudaContext()` 创建成功
 - rasterize + interpolate + antialias + texture 全部 PASS
 
-### 实际结果
-（待实验）
+### 实际结果 ✅ 全部通过
+
+```
+=== TEST 0: GPU sanity ===        PASS
+=== TEST 1: import ===            PASS
+=== TEST 2: RasterizeCudaContext   PASS
+=== TEST 3: interpolate            PASS
+=== TEST 4: rasterize (wave64)     PASS  non-zero pixels: 8192
+=== TEST 5: texture                PASS
+=== TEST 6: antialias fwd+bwd     PASS  grad abs sum: 34632.8
+=== TEST 7: full pipeline+bwd     PASS  grad abs sum: 47783.9
+```
+
+### 修复汇总 (多轮迭代)
+
+| # | 问题 | 文件 | 修复 |
+|---|------|------|------|
+| 1 | wave64 半wavefront模拟 | `Defs.hpp`, `common.h` | `ballot_sync` → `__builtin_amdgcn_ballot_w64` 提取半段；`all/any_sync` 从 ballot 推导；`match_any_sync` 逐 bit ballot |
+| 2 | wave64 lane mask | `Util.inl` | `getLaneMaskLt/Le/Gt/Ge` 从 `threadIdx.x` 计算；`singleLane` 用修正后 ballot |
+| 3 | `__AMDGCN_WAVEFRONT_SIZE` 宏未定义 (ROCm 7.2.1) | `Defs.hpp`, `common.h`, `Util.inl` | 定义 `NVDR_WAVE64` 宏，基于 `__gfx908__`/`__gfx90a__`/`__gfx940__`/`__gfx941__`/`__gfx942__` |
+| 4 | `all_sync`/`any_sync` 原生 HIP 函数对半wavefront语义不正确 | `Defs.hpp`, `common.h` | 改用 `ballot_sync` 推导 |
+| 5 | Build cache 不感知 `.inl` 文件变更 | `scripts/cdna3_build_test.sh` | `rm -rf build/ dist/ *.egg-info` 强制 clean build |
+| 6 | Antialias gradient kernel 持久线程模式死锁 | `antialias.cu` | `__syncthreads()`/`s_barrier` 不处理提前退出的 wavefront → 改为 block 级别统一退出 (`s_base >= workCount` 时 return) |
 
 ### 调试追踪
 
-| 轮次 | 架构 | 问题 | 修复 | 结果 |
-|------|------|------|------|------|
-| — | — | — | — | — |
+| 轮次 | 问题 | 措施 | 结果 |
+|------|------|------|------|
+| 1 | rocm 分支 interpolate 在 gfx942 上 `HSA_STATUS_ERROR_EXCEPTION` | 基线测试 | 确认为 pre-existing 问题 |
+| 2 | 最小化 kernel 通过，完整 kernel 崩溃 | fprintf + cudaDeviceSynchronize 逐 kernel 诊断 | 定位到 binRasterKernel |
+| 3 | binRaster `#ifdef` 空函数仍崩溃 (shared mem 44304 与 CUDA 路径一致) | 发现 build cache 问题 | `rm -rf build/` 后 stub 通过 |
+| 4 | coarseRaster 崩溃 | 添加 AMD stub (初始化 tile 元数据) | stub 通过，fineRaster 全代码也通过 |
+| 5 | `__AMDGCN_WAVEFRONT_SIZE` 未定义，wave64 路径未激活 | printf 诊断 + `NVDR_WAVE64` 宏 | 确认 `warpSize=64`, `__gfx942__` 已定义 |
+| 6 | 启用完整 BinRaster (无 stub) | 移除 AMD stub | 通过 ✅ |
+| 7 | 启用完整 CoarseRaster (无 stub) | 移除 AMD stub | 通过 ✅ rasterize 输出 8192 non-zero pixels |
+| 8 | Antialias backward 死锁 (varying color) | block 级别退出修复 | 通过 ✅ |
+| 9 | Full pipeline (rasterize→interpolate→antialias→backward) | 最终验证 | 全部通过 ✅ |
+
+### 结论
+方案 A (半wavefront模拟) 可行。wave64 CDNA3 上 cudaraster 全部四个阶段 (triangleSetup, binRaster, coarseRaster, fineRaster) + interpolate + antialias (含 gradient) + texture 均正常工作。
