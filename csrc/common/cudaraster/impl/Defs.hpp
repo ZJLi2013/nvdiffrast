@@ -45,7 +45,7 @@ static __device__ __forceinline__ int _half()
 
 static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
 {
-    unsigned long long full = ::__ballot(pred);
+    unsigned long long full = __ballot_sync(0xFFFFFFFFFFFFFFFFULL, pred);
     return ((unsigned int)(full >> (_half() * 32))) & mask;
 }
 
