@@ -17,6 +17,17 @@
 #include <stdint.h>
 
 //------------------------------------------------------------------------
+// HIP compatibility: ROCm 7.x requires 64-bit mask for __ballot_sync.
+
+#if defined(__HIP_PLATFORM_AMD__) && (defined(__CUDACC__) || defined(__HIPCC__))
+static __device__ __forceinline__ unsigned int nvdr_ballot_sync(unsigned int mask, int pred)
+{
+    return (unsigned int)__ballot_sync((unsigned long long)mask, pred);
+}
+#define __ballot_sync(mask, pred) nvdr_ballot_sync((unsigned int)(mask), (int)(pred))
+#endif
+
+//------------------------------------------------------------------------
 // C++ helper function prototypes.
 
 dim3 getLaunchBlockSize(int maxWidth, int maxHeight, int width, int height);

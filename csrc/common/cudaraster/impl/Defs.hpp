@@ -19,6 +19,26 @@
 
 #include <cstdint>
 
+//------------------------------------------------------------------------
+// HIP compatibility shims (must be before namespace CR).
+
+#if defined(__HIP_PLATFORM_AMD__) && (defined(__CUDACC__) || defined(__HIPCC__))
+
+static __device__ __forceinline__ void __syncwarp()                  { __builtin_amdgcn_wave_barrier(); }
+static __device__ __forceinline__ void __syncwarp(unsigned int mask) { __builtin_amdgcn_wave_barrier(); }
+
+#ifndef NVDR_BALLOT_SYNC_DEFINED
+#define NVDR_BALLOT_SYNC_DEFINED
+static __device__ __forceinline__ unsigned int nvdr_cr_ballot_sync(unsigned int mask, int pred)
+{
+    return (unsigned int)__ballot_sync((unsigned long long)mask, pred);
+}
+#undef __ballot_sync
+#define __ballot_sync(mask, pred) nvdr_cr_ballot_sync((unsigned int)(mask), (int)(pred))
+#endif
+
+#endif // __HIP_PLATFORM_AMD__
+
 namespace CR
 {
 //------------------------------------------------------------------------
@@ -31,11 +51,6 @@ namespace CR
 #   define CR_CUDA 1
 #else
 #   define CR_CUDA 0
-#endif
-
-#if defined(__HIP_PLATFORM_AMD__) && CR_CUDA
-static __device__ __forceinline__ void __syncwarp()                  { __builtin_amdgcn_wave_barrier(); }
-static __device__ __forceinline__ void __syncwarp(unsigned int mask) { __builtin_amdgcn_wave_barrier(); }
 #endif
 
 #if CR_CUDA
