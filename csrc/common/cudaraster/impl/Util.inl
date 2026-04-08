@@ -20,6 +20,91 @@ __device__ __inline__ U32   getHi                   (U64 a)                 { re
 __device__ __inline__ S32   getHi                   (S64 a)                 { return __double2hiint(__longlong_as_double(a)); }
 __device__ __inline__ U64   combineLoHi             (U32 lo, U32 hi)        { return __double_as_longlong(__hiloint2double(hi, lo)); }
 __device__ __inline__ S64   combineLoHi             (S32 lo, S32 hi)        { return __double_as_longlong(__hiloint2double(hi, lo)); }
+#if defined(__HIP_PLATFORM_AMD__)
+
+#define HIP_ENABLE_WARP_SYNC_BUILTINS
+
+__device__ __inline__ U32   getLaneMaskLt           (void)                  { return __lanemask_lt(); }
+__device__ __inline__ U32   getLaneMaskLe           (void)                  { return __lanemask_le(); }
+__device__ __inline__ U32   getLaneMaskGt           (void)                  { return __lanemask_gt(); }
+__device__ __inline__ U32   getLaneMaskGe           (void)                  { return __lanemask_ge(); }
+__device__ __inline__ int   findLeadingOne          (U32 v)                 { return (v == 0) ? (int)~0u : 31 - __clz(v); }
+__device__ __inline__ bool  singleLane              (void)                  { return ((::__ballot(true) & getLaneMaskLt()) == 0); }
+
+__device__ __inline__ void  add_add_carry           (U32& rlo, U32 alo, U32 blo, U32& rhi, U32 ahi, U32 bhi) { U64 r = combineLoHi(alo, ahi) + combineLoHi(blo, bhi); rlo = getLo(r); rhi = getHi(r); }
+__device__ __inline__ S32   f32_to_s32_sat          (F32 a)                 { F32 c = rintf(a); if (c <= -2147483648.f) return (S32)0x80000000; if (c >= 2147483647.f) return 0x7FFFFFFF; return (S32)c; }
+__device__ __inline__ U32   f32_to_u32_sat          (F32 a)                 { F32 c = rintf(a); if (c <= 0.f) return 0; if (c >= 4294967295.f) return 0xFFFFFFFFu; return (U32)c; }
+__device__ __inline__ U32   f32_to_u32_sat_rmi      (F32 a)                 { F32 c = floorf(a); if (c <= 0.f) return 0; if (c >= 4294967295.f) return 0xFFFFFFFFu; return (U32)c; }
+__device__ __inline__ U32   f32_to_u8_sat           (F32 a)                 { F32 c = rintf(a); if (c <= 0.f) return 0; if (c >= 255.f) return 255; return (U32)c; }
+__device__ __inline__ S64   f32_to_s64              (F32 a)                 { return (S64)llrintf(a); }
+
+static __device__ __inline__ S16 extract_s16lo(S32 a) { return (S16)(a & 0xFFFF); }
+static __device__ __inline__ S16 extract_s16hi(S32 a) { return (S16)((a >> 16) & 0xFFFF); }
+static __device__ __inline__ U16 extract_u16lo(U32 a) { return (U16)(a & 0xFFFF); }
+static __device__ __inline__ U16 extract_u16hi(U32 a) { return (U16)((a >> 16) & 0xFFFF); }
+static __device__ __inline__ U32 extract_byte(U32 a, int b) { return (a >> (b * 8)) & 0xFF; }
+
+__device__ __inline__ S32   add_s16lo_s16lo         (S32 a, S32 b)          { return (S32)extract_s16lo(a) + (S32)extract_s16lo(b); }
+__device__ __inline__ S32   add_s16hi_s16lo         (S32 a, S32 b)          { return (S32)extract_s16hi(a) + (S32)extract_s16lo(b); }
+__device__ __inline__ S32   add_s16lo_s16hi         (S32 a, S32 b)          { return (S32)extract_s16lo(a) + (S32)extract_s16hi(b); }
+__device__ __inline__ S32   add_s16hi_s16hi         (S32 a, S32 b)          { return (S32)extract_s16hi(a) + (S32)extract_s16hi(b); }
+__device__ __inline__ S32   sub_s16lo_s16lo         (S32 a, S32 b)          { return (S32)extract_s16lo(a) - (S32)extract_s16lo(b); }
+__device__ __inline__ S32   sub_s16hi_s16lo         (S32 a, S32 b)          { return (S32)extract_s16hi(a) - (S32)extract_s16lo(b); }
+__device__ __inline__ S32   sub_s16lo_s16hi         (S32 a, S32 b)          { return (S32)extract_s16lo(a) - (S32)extract_s16hi(b); }
+__device__ __inline__ S32   sub_s16hi_s16hi         (S32 a, S32 b)          { return (S32)extract_s16hi(a) - (S32)extract_s16hi(b); }
+__device__ __inline__ S32   sub_u16lo_u16lo         (U32 a, U32 b)          { return (S32)extract_u16lo(a) - (S32)extract_u16lo(b); }
+__device__ __inline__ S32   sub_u16hi_u16lo         (U32 a, U32 b)          { return (S32)extract_u16hi(a) - (S32)extract_u16lo(b); }
+__device__ __inline__ S32   sub_u16lo_u16hi         (U32 a, U32 b)          { return (S32)extract_u16lo(a) - (S32)extract_u16hi(b); }
+__device__ __inline__ S32   sub_u16hi_u16hi         (U32 a, U32 b)          { return (S32)extract_u16hi(a) - (S32)extract_u16hi(b); }
+
+__device__ __inline__ U32   add_b0                  (U32 a, U32 b)          { return extract_byte(a, 0) + b; }
+__device__ __inline__ U32   add_b1                  (U32 a, U32 b)          { return extract_byte(a, 1) + b; }
+__device__ __inline__ U32   add_b2                  (U32 a, U32 b)          { return extract_byte(a, 2) + b; }
+__device__ __inline__ U32   add_b3                  (U32 a, U32 b)          { return extract_byte(a, 3) + b; }
+__device__ __inline__ U32   vmad_b0                 (U32 a, U32 b, U32 c)   { return extract_byte(a, 0) * b + c; }
+__device__ __inline__ U32   vmad_b1                 (U32 a, U32 b, U32 c)   { return extract_byte(a, 1) * b + c; }
+__device__ __inline__ U32   vmad_b2                 (U32 a, U32 b, U32 c)   { return extract_byte(a, 2) * b + c; }
+__device__ __inline__ U32   vmad_b3                 (U32 a, U32 b, U32 c)   { return extract_byte(a, 3) * b + c; }
+__device__ __inline__ U32   vmad_b0_b3              (U32 a, U32 b, U32 c)   { return extract_byte(a, 0) * extract_byte(b, 3) + c; }
+__device__ __inline__ U32   vmad_b1_b3              (U32 a, U32 b, U32 c)   { return extract_byte(a, 1) * extract_byte(b, 3) + c; }
+__device__ __inline__ U32   vmad_b2_b3              (U32 a, U32 b, U32 c)   { return extract_byte(a, 2) * extract_byte(b, 3) + c; }
+__device__ __inline__ U32   vmad_b3_b3              (U32 a, U32 b, U32 c)   { return extract_byte(a, 3) * extract_byte(b, 3) + c; }
+__device__ __inline__ U32   add_mask8               (U32 a, U32 b)          { return (a + b) & 0xFF; }
+__device__ __inline__ U32   sub_mask8               (U32 a, U32 b)          { return (a - b) & 0xFF; }
+__device__ __inline__ S32   max_max                 (S32 a, S32 b, S32 c)   { return ::max(::max(a, b), c); }
+__device__ __inline__ S32   min_min                 (S32 a, S32 b, S32 c)   { return ::min(::min(a, b), c); }
+__device__ __inline__ S32   max_add                 (S32 a, S32 b, S32 c)   { return ::max(a, b) + c; }
+__device__ __inline__ S32   min_add                 (S32 a, S32 b, S32 c)   { return ::min(a, b) + c; }
+__device__ __inline__ U32   add_add                 (U32 a, U32 b, U32 c)   { return a + b + c; }
+__device__ __inline__ U32   sub_add                 (U32 a, U32 b, U32 c)   { return a - b + c; }
+__device__ __inline__ U32   add_sub                 (U32 a, U32 b, U32 c)   { return a - c + b; }
+__device__ __inline__ S32   add_clamp_0_x           (S32 a, S32 b, S32 c)   { S32 s = a + b; return ::min(::max(s, (S32)0), c); }
+__device__ __inline__ S32   add_clamp_b0            (S32 a, S32 b, S32 c)   { S32 s = a + b; s = ::min(::max(s, (S32)0), (S32)255); return s; }
+__device__ __inline__ S32   add_clamp_b2            (S32 a, S32 b, S32 c)   { S32 s = a + b; s = ::min(::max(s, (S32)0), (S32)255); return s; }
+
+__device__ __inline__ U32   prmt                    (U32 a, U32 b, U32 c)
+{
+    union { U32 u32[2]; U8 u8[8]; } src;
+    src.u32[0] = a;
+    src.u32[1] = b;
+    U32 result = 0;
+    result |= (U32)src.u8[(c >> 0) & 0x7];
+    result |= (U32)src.u8[(c >> 4) & 0x7] << 8;
+    result |= (U32)src.u8[(c >> 8) & 0x7] << 16;
+    result |= (U32)src.u8[(c >> 12) & 0x7] << 24;
+    return result;
+}
+
+__device__ __inline__ S32   u32lo_sext              (U32 a)                 { return (S32)(S16)(a & 0xFFFF); }
+__device__ __inline__ U32   slct                    (U32 a, U32 b, S32 c)   { return (c >= 0) ? a : b; }
+__device__ __inline__ S32   slct                    (S32 a, S32 b, S32 c)   { return (c >= 0) ? a : b; }
+__device__ __inline__ F32   slct                    (F32 a, F32 b, S32 c)   { return (c >= 0) ? a : b; }
+__device__ __inline__ U32   isetge                  (S32 a, S32 b)          { return (a >= b) ? 0xFFFFFFFFu : 0u; }
+__device__ __inline__ F64   rcp_approx              (F64 a)                 { return 1.0 / a; }
+__device__ __inline__ F32   fma_rm                  (F32 a, F32 b, F32 c)   { return fmaf(a, b, c); }
+
+#else // NVIDIA PTX path
+
 __device__ __inline__ U32   getLaneMaskLt           (void)                  { U32 r; asm("mov.u32 %0, %lanemask_lt;" : "=r"(r)); return r; }
 __device__ __inline__ U32   getLaneMaskLe           (void)                  { U32 r; asm("mov.u32 %0, %lanemask_le;" : "=r"(r)); return r; }
 __device__ __inline__ U32   getLaneMaskGt           (void)                  { U32 r; asm("mov.u32 %0, %lanemask_gt;" : "=r"(r)); return r; }
@@ -77,6 +162,8 @@ __device__ __inline__ F32   slct                    (F32 a, F32 b, S32 c)   { F3
 __device__ __inline__ U32   isetge                  (S32 a, S32 b)          { U32 v; asm("set.ge.u32.s32 %0, %1, %2;" : "=r"(v) : "r"(a), "r"(b)); return v; }
 __device__ __inline__ F64   rcp_approx              (F64 a)                 { F64 v; asm("rcp.approx.ftz.f64 %0, %1;" : "=d"(v) : "d"(a)); return v; }
 __device__ __inline__ F32   fma_rm                  (F32 a, F32 b, F32 c)   { F32 v; asm("fma.rm.f32 %0, %1, %2, %3;" : "=f"(v) : "f"(a), "f"(b), "f"(c)); return v; }
+
+#endif // __HIP_PLATFORM_AMD__
 __device__ __inline__ U32   idiv_fast               (U32 a, U32 b);
 
 __device__ __inline__ uint3 setupPleq               (float3 values, int2 v0, int2 d1, int2 d2, F32 areaRcp);

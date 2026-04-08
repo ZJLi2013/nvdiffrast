@@ -8,19 +8,44 @@
 
 import setuptools
 import os
+import platform
 
-# Print an error message if there's no PyTorch installed.
 try:
-    from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+    from torch.utils.cpp_extension import BuildExtension, CUDAExtension, IS_HIP_EXTENSION
 except ImportError:
-    # This happens if the user runs 'pip install' with default build isolation
-    # OR if they simply don't have torch installed at all.
     print("\n\n" + "*" * 70)
     print("ERROR! Cannot compile nvdiffrast CUDA extension. Please ensure that:\n")
     print("1. You have PyTorch installed")
     print("2. You run 'pip install' with --no-build-isolation flag")
     print("*" * 70 + "\n\n")
     exit(1)
+
+BUILD_TARGET = os.environ.get("BUILD_TARGET", "auto")
+IS_WINDOWS = platform.system() == "Windows"
+
+if BUILD_TARGET == "auto":
+    IS_HIP = bool(IS_HIP_EXTENSION)
+elif BUILD_TARGET == "cuda":
+    IS_HIP = False
+elif BUILD_TARGET == "rocm":
+    IS_HIP = True
+else:
+    raise ValueError(f"Invalid BUILD_TARGET={BUILD_TARGET}")
+
+cxx_flags = ["-DNVDR_TORCH"]
+nvcc_flags = ["-DNVDR_TORCH"]
+
+if IS_WINDOWS:
+    cxx_flags += ["/wd4067", "/wd4624", "/wd4996"]
+    if not IS_HIP:
+        nvcc_flags += ["-lineinfo"]
+else:
+    if not IS_HIP:
+        nvcc_flags += ["-lineinfo"]
+
+if IS_HIP:
+    archs = os.getenv("GPU_ARCHS", "native").split(";")
+    nvcc_flags += [f"--offload-arch={arch}" for arch in archs]
 
 setuptools.setup(
     ext_modules=[
@@ -44,10 +69,8 @@ setuptools.setup(
                 "csrc/torch/torch_texture.cpp",
             ],
             extra_compile_args={
-                "cxx": ["-DNVDR_TORCH"]
-                # Disable warnings in torch headers.
-                + (["/wd4067", "/wd4624", "/wd4996"] if os.name == "nt" else []),
-                "nvcc": ["-DNVDR_TORCH", "-lineinfo"],
+                "cxx": cxx_flags,
+                "nvcc": nvcc_flags,
             },
         )
     ],

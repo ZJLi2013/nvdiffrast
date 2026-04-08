@@ -9,6 +9,18 @@
 #include "common.h"
 #include "texture.h"
 
+#if defined(__HIP_PLATFORM_AMD__)
+static __device__ __forceinline__ float nvdr_frcp_rz(float x)
+{
+    return (x == 0.f) ? 0.f : __builtin_amdgcn_rcp_f32(x);
+}
+#else
+static __device__ __forceinline__ float nvdr_frcp_rz(float x)
+{
+    return __frcp_rz(x);
+}
+#endif
+
 //------------------------------------------------------------------------
 // Memory access and math helpers.
 
@@ -107,7 +119,7 @@ static __device__ __forceinline__ int indexCubeMap(float& x, float& y, float z)
     else if (ay > ax)       { idx = 2; c = y; y = z; }
     else                    { idx = 0; c = x; x = z; }
     if (c < 0.f) idx += 1;
-    float m = __frcp_rz(fabsf(c)) * .5;
+    float m = nvdr_frcp_rz(fabsf(c)) * .5;
     float m0 = __uint_as_float(__float_as_uint(m) ^ ((0x21u >> idx) << 31));
     float m1 = (idx != 2) ? -m : m;
     x = x * m0 + .5;
@@ -133,7 +145,7 @@ static __device__ __forceinline__ float3 indexCubeMapGrad(float3 uv, float gu, f
     else if (ay > ax)       { idx = 0x04; c = uv.y; c0 *= uv.x; c1 *= uv.z; }
     else                    { idx = 0x01; c = uv.x; c0 *= uv.z; c1 *= uv.y; }
     if (c < 0.f) idx += idx;
-    float m = __frcp_rz(fabsf(c));
+    float m = nvdr_frcp_rz(fabsf(c));
     c0 = (idx & 0x34) ? -c0 : c0;
     c1 = (idx & 0x2e) ? -c1 : c1;
     float gl = (c0 + c1) * m;
@@ -160,7 +172,7 @@ static __device__ __forceinline__ void indexCubeMapGrad4(float3 uv, float4 dw, f
     else if (ay > ax)       { idx = 0x04; c = uv.y; c0 = uv.x; c1 = uv.z; }
     else                    { idx = 0x01; c = uv.x; c0 = uv.z; c1 = uv.y; }
     if (c < 0.f) idx += idx;
-    float m = __frcp_rz(fabsf(c));
+    float m = nvdr_frcp_rz(fabsf(c));
     c0 = (idx & 0x34) ? -c0 : c0;
     c1 = (idx & 0x2e) ? -c1 : c1;
     float gl0 = (dw.x * c0 + dw.z * c1) * m;
@@ -203,7 +215,7 @@ static __device__ __forceinline__ float4 indexCubeMapGradST(float3 uv, float3 dv
         dvdX.z = -dvdX.z;
         dvdY.z = -dvdY.z;
     }
-    float m = __frcp_rz(fabsf(c));
+    float m = nvdr_frcp_rz(fabsf(c));
     float dm = m * .5f;
     float mm = m * dm;
     gu *= (idx & 0x34) ? -mm : mm;
@@ -261,7 +273,7 @@ static __device__ __forceinline__ void indexCubeMapGrad2(float3 uv, float3 dvdX,
         dvdY.z = -dvdY.z;
     }
 
-    float m = __frcp_rz(c);
+    float m = nvdr_frcp_rz(c);
     float dm = -m * fabsf(m) * .5;
     float mm = m * m * .5;
     float mu = (idx & 0x34) ? -mm : mm;

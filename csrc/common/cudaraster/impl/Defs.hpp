@@ -7,7 +7,16 @@
 // license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 #pragma once
-#include <cuda_runtime.h>
+
+#if defined(__HIP_PLATFORM_AMD__)
+#   ifndef HIP_ENABLE_WARP_SYNC_BUILTINS
+#       define HIP_ENABLE_WARP_SYNC_BUILTINS
+#   endif
+#   include <hip/hip_runtime.h>
+#else
+#   include <cuda_runtime.h>
+#endif
+
 #include <cstdint>
 
 namespace CR
@@ -18,10 +27,15 @@ namespace CR
 #   define NULL 0
 #endif
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 #   define CR_CUDA 1
 #else
 #   define CR_CUDA 0
+#endif
+
+#if defined(__HIP_PLATFORM_AMD__) && CR_CUDA
+static __device__ __forceinline__ void __syncwarp()                  { __builtin_amdgcn_wave_barrier(); }
+static __device__ __forceinline__ void __syncwarp(unsigned int mask) { __builtin_amdgcn_wave_barrier(); }
 #endif
 
 #if CR_CUDA

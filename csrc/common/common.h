@@ -7,7 +7,13 @@
 // license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 #pragma once
+
+#if defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+#else
 #include <cuda.h>
+#endif
+
 #include <stdint.h>
 
 //------------------------------------------------------------------------
@@ -19,7 +25,7 @@ dim3 getLaunchGridSize(dim3 blockSize, int width, int height, int depth);
 //------------------------------------------------------------------------
 // The rest is CUDA device code specific stuff.
 
-#ifdef __CUDACC__
+#if defined(__CUDACC__) || defined(__HIPCC__)
 
 //------------------------------------------------------------------------
 // Helpers for CUDA vector types.
@@ -260,4 +266,4 @@ static __device__ __forceinline__ float triidx_to_float(int x)   { if (x <= 0x01
 #endif // __CUDA_ARCH__ >= 700
 
 //------------------------------------------------------------------------
-#endif // __CUDACC__
+#endif // __CUDACC__ || __HIPCC__
