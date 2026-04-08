@@ -10,7 +10,20 @@
 
 __device__ __inline__ void binRasterImpl(const CRParams p)
 {
-#if defined(__HIP_PLATFORM_AMD__) && defined(__AMDGCN_WAVEFRONT_SIZE)
+#if defined(__HIP_PLATFORM_AMD__)
+    int thrInBlock = threadIdx.x + threadIdx.y * 32;
+    if (thrInBlock == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
+        printf("[binRaster] AMD stub active (wave%d)\n", __AMDGCN_WAVEFRONT_SIZE);
+    CRAtomics& atomics = p.atomics[blockIdx.z];
+    if (atomics.numSubtris > p.maxSubtris)
+        return;
+    S32* binFirstSeg = (S32*)p.binFirstSeg + CR_MAXBINS_SQR * CR_BIN_STREAMS_SIZE * blockIdx.z;
+    S32* binTotal = (S32*)p.binTotal + CR_MAXBINS_SQR * CR_BIN_STREAMS_SIZE * blockIdx.z;
+    if (thrInBlock < p.numBins)
+    {
+        binFirstSeg[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = -1;
+        binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = 0;
+    }
     return;
 #else
     __shared__ volatile U32 s_broadcast [CR_BIN_WARPS + 16];
@@ -54,13 +67,6 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
         s_outOfs[thrInBlock] = -CR_BIN_SEG_SIZE;
         s_outTotal[thrInBlock] = 0;
     }
-
-    // CDNA3 diagnostic: skip processing loop to isolate crash.
-#if defined(__HIP_PLATFORM_AMD__) && __AMDGCN_WAVEFRONT_SIZE == 64
-    if (thrInBlock < p.numBins)
-        binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = 0;
-    return;
-#endif
 
     // repeat until done
     for(;;)
@@ -428,7 +434,7 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
     // output totals
     if (thrInBlock < p.numBins)
         binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = s_outTotal[thrInBlock];
-#endif // !(__HIP_PLATFORM_AMD__ && __AMDGCN_WAVEFRONT_SIZE)
+#endif // !__HIP_PLATFORM_AMD__
 }
 
 //------------------------------------------------------------------------

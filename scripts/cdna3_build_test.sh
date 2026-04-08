@@ -7,8 +7,9 @@ python3 -c 'import torch; print(f"torch {torch.__version__}")'
 hipcc --version 2>&1 | tail -2
 rocminfo 2>/dev/null | grep -m1 'gfx' || true
 
-echo "=== BUILDING nvdiffrast for gfx942 ==="
+echo "=== BUILDING nvdiffrast for gfx942 (clean build) ==="
 cd /data/kernels/nvdiffrast
+rm -rf build/ dist/ *.egg-info _nvdiffrast_c*.so
 GPU_ARCHS=gfx942 pip install . --no-build-isolation 2>&1
 
 echo "=== BUILD COMPLETE ==="
