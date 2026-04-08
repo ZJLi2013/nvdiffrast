@@ -14,23 +14,18 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
     int thrInBlock = threadIdx.x + threadIdx.y * 32;
     if (thrInBlock == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
     {
-        printf("[binRaster] warpSize=%d __lane_id()=%d\n", warpSize, __lane_id());
+        int ws = (int)warpSize;
+        int lid = (int)__lane_id();
+        printf("[binRaster] warpSize=%d lane=%d\n", ws, lid);
 #ifdef __AMDGCN_WAVEFRONT_SIZE
-        printf("[binRaster] __AMDGCN_WAVEFRONT_SIZE=%d\n", (int)__AMDGCN_WAVEFRONT_SIZE);
+        printf("[binRaster] WAVEFRONT_SIZE=%d\n", (int)__AMDGCN_WAVEFRONT_SIZE);
+#elif defined(__AMDGCN_WAVEFRONT_SIZE__)
+        printf("[binRaster] WAVEFRONT_SIZE__=%d\n", (int)__AMDGCN_WAVEFRONT_SIZE__);
 #else
-        printf("[binRaster] __AMDGCN_WAVEFRONT_SIZE NOT defined\n");
-#endif
-#ifdef __AMDGCN_WAVEFRONT_SIZE__
-        printf("[binRaster] __AMDGCN_WAVEFRONT_SIZE__=%d\n", (int)__AMDGCN_WAVEFRONT_SIZE__);
-#endif
-#ifdef __AMDGCN__
-        printf("[binRaster] __AMDGCN__ defined\n");
+        printf("[binRaster] no WAVEFRONT_SIZE macro\n");
 #endif
 #ifdef __gfx942__
-        printf("[binRaster] __gfx942__ defined\n");
-#endif
-#ifdef __HIP_DEVICE_COMPILE__
-        printf("[binRaster] __HIP_DEVICE_COMPILE__ defined\n");
+        printf("[binRaster] __gfx942__\n");
 #endif
     }
     CRAtomics& atomics = p.atomics[blockIdx.z];
