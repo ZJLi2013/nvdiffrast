@@ -100,4 +100,70 @@ tex_out = dr.texture(tex, uv)
 print(f"texture: {list(tex_out.shape)}", flush=True)
 ' && echo "PASS" || echo "FAIL"
 
+echo "=== TEST 6: antialias forward + backward (wave64 ballot + match_any) ==="
+python3 -c '
+import torch, sys; sys.stdout.reconfigure(line_buffering=True)
+import nvdiffrast.torch as dr
+
+glctx = dr.RasterizeCudaContext()
+vertices = torch.tensor([
+    [-0.5, -0.5, 0.0, 1.0],
+    [ 0.5, -0.5, 0.0, 1.0],
+    [ 0.0,  0.5, 0.0, 1.0],
+], dtype=torch.float32, device="cuda").unsqueeze(0).requires_grad_(True)
+triangles = torch.tensor([[0, 1, 2]], dtype=torch.int32, device="cuda")
+
+print("rasterize...", flush=True)
+rast_out, _ = dr.rasterize(glctx, vertices, triangles, resolution=[256, 256])
+color = torch.ones(1, 256, 256, 3, dtype=torch.float32, device="cuda")
+
+print("antialias fwd...", flush=True)
+aa_out = dr.antialias(color, rast_out, vertices, triangles)
+torch.cuda.synchronize()
+print(f"antialias fwd: {list(aa_out.shape)}", flush=True)
+
+print("antialias bwd (gradient)...", flush=True)
+loss = aa_out.sum()
+loss.backward()
+torch.cuda.synchronize()
+grad = vertices.grad
+print(f"antialias bwd OK, grad shape: {list(grad.shape)}, grad abs sum: {grad.abs().sum().item():.6f}", flush=True)
+' && echo "PASS" || echo "FAIL"
+
+echo "=== TEST 7: full pipeline (rasterize + interpolate + antialias grad) ==="
+python3 -c '
+import torch, sys; sys.stdout.reconfigure(line_buffering=True)
+import nvdiffrast.torch as dr
+
+glctx = dr.RasterizeCudaContext()
+vertices = torch.tensor([
+    [-0.5, -0.5, 0.0, 1.0],
+    [ 0.5, -0.5, 0.0, 1.0],
+    [ 0.0,  0.5, 0.0, 1.0],
+], dtype=torch.float32, device="cuda").unsqueeze(0).requires_grad_(True)
+triangles = torch.tensor([[0, 1, 2]], dtype=torch.int32, device="cuda")
+vertex_colors = torch.tensor([[
+    [1.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
+]], dtype=torch.float32, device="cuda")
+
+print("rasterize...", flush=True)
+rast_out, _ = dr.rasterize(glctx, vertices, triangles, resolution=[256, 256])
+print(f"rasterize: non-zero={(rast_out[...,3]>0).sum().item()}", flush=True)
+
+print("interpolate...", flush=True)
+color, _ = dr.interpolate(vertex_colors, rast_out, triangles)
+print(f"interpolate: {list(color.shape)}", flush=True)
+
+print("antialias...", flush=True)
+aa_out = dr.antialias(color, rast_out, vertices, triangles)
+
+print("backward...", flush=True)
+loss = aa_out.sum()
+loss.backward()
+torch.cuda.synchronize()
+print(f"full pipeline OK, grad abs sum: {vertices.grad.abs().sum().item():.6f}", flush=True)
+' && echo "PASS" || echo "FAIL"
+
 echo "=== ALL DONE ==="
