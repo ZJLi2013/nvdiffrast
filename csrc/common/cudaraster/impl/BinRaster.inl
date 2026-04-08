@@ -10,6 +10,9 @@
 
 __device__ __inline__ void binRasterImpl(const CRParams p)
 {
+#if defined(__HIP_PLATFORM_AMD__)
+    return; // Unconditional early return for all AMD platforms
+#endif
     __shared__ volatile U32 s_broadcast [CR_BIN_WARPS + 16];
     __shared__ volatile S32 s_outOfs    [CR_MAXBINS_SQR];
     __shared__ volatile S32 s_outTotal  [CR_MAXBINS_SQR];
