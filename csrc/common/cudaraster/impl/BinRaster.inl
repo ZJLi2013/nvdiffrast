@@ -52,6 +52,13 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
         s_outTotal[thrInBlock] = 0;
     }
 
+    // CDNA3 diagnostic: skip processing loop to isolate crash.
+#if defined(__HIP_PLATFORM_AMD__) && __AMDGCN_WAVEFRONT_SIZE == 64
+    if (thrInBlock < p.numBins)
+        binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = 0;
+    return;
+#endif
+
     // repeat until done
     for(;;)
     {
