@@ -31,7 +31,7 @@ static __forceinline__ __device__ void InterpolateFwdKernelTemplate(const Interp
 
     // Fetch rasterizer output.
     float4 r = ((float4*)p.rast)[pidx];
-    int triIdx = (int)r.w - 1;
+    int triIdx = float_to_triidx(r.w) - 1;
     bool triValid = (triIdx >= 0 && triIdx < p.numTriangles);
 
     // Per-thread early exit for invalid triangles (no warp sync).
