@@ -41,11 +41,16 @@ static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, in
     return ((unsigned int)(full >> (_half() * 32))) & mask;
 }
 
-static __device__ __forceinline__ bool all_sync(unsigned int /*mask*/, int pred)
-{ return __all(pred); }
+static __device__ __forceinline__ bool all_sync(unsigned int mask, int pred)
+{
+    unsigned int b = ballot_sync(~0u, pred);
+    return (b & mask) == mask;
+}
 
-static __device__ __forceinline__ bool any_sync(unsigned int /*mask*/, int pred)
-{ return __any(pred); }
+static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
+{
+    return (ballot_sync(~0u, pred) & mask) != 0;
+}
 
 static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
 {
