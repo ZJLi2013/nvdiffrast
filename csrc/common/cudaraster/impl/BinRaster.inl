@@ -10,9 +10,9 @@
 
 __device__ __inline__ void binRasterImpl(const CRParams p)
 {
-#if defined(__HIP_PLATFORM_AMD__)
-    return; // Unconditional early return for all AMD platforms
-#endif
+#if defined(__HIP_PLATFORM_AMD__) && defined(__AMDGCN_WAVEFRONT_SIZE)
+    return;
+#else
     __shared__ volatile U32 s_broadcast [CR_BIN_WARPS + 16];
     __shared__ volatile S32 s_outOfs    [CR_MAXBINS_SQR];
     __shared__ volatile S32 s_outTotal  [CR_MAXBINS_SQR];
@@ -428,6 +428,7 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
     // output totals
     if (thrInBlock < p.numBins)
         binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = s_outTotal[thrInBlock];
+#endif // !(__HIP_PLATFORM_AMD__ && __AMDGCN_WAVEFRONT_SIZE)
 }
 
 //------------------------------------------------------------------------
