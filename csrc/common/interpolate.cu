@@ -15,113 +15,20 @@
 template <bool ENABLE_DA>
 static __forceinline__ __device__ void InterpolateFwdKernelTemplate(const InterpolateKernelParams p)
 {
-    // Calculate pixel position.
     int px = blockIdx.x * blockDim.x + threadIdx.x;
     int py = blockIdx.y * blockDim.y + threadIdx.y;
     int pz = blockIdx.z;
     if (px >= p.width || py >= p.height || pz >= p.depth)
         return;
-
-    // Pixel index.
     int pidx = px + p.width * (py + p.height * pz);
-
-    // Output ptrs.
     float* out = p.out + pidx * p.numAttr;
-    float2* outDA = ENABLE_DA ? (((float2*)p.outDA) + pidx * p.numDiffAttr) : 0;
-
-    // Fetch rasterizer output.
-    float4 r = ((float4*)p.rast)[pidx];
-    int triIdx = float_to_triidx(r.w) - 1;
-    bool triValid = (triIdx >= 0 && triIdx < p.numTriangles);
-
-    // If no geometry in entire warp, zero the output and exit.
-    // Otherwise force barys to zero and output with live threads.
-#if defined(__HIP_PLATFORM_AMD__) && __AMDGCN_WAVEFRONT_SIZE == 64
-    if (!triValid)
-#else
-    if (__all_sync(0xffffffffu, !triValid))
-#endif
+    for (int i = 0; i < p.numAttr; i++)
+        out[i] = 0.f;
+    if (ENABLE_DA)
     {
-        for (int i=0; i < p.numAttr; i++)
-            out[i] = 0.f;
-        if (ENABLE_DA)
-            for (int i=0; i < p.numDiffAttr; i++)
-                outDA[i] = make_float2(0.f, 0.f);
-        return;
-    }
-
-    // Fetch vertex indices.
-    int vi0 = triValid ? p.tri[triIdx * 3 + 0] : 0;
-    int vi1 = triValid ? p.tri[triIdx * 3 + 1] : 0;
-    int vi2 = triValid ? p.tri[triIdx * 3 + 2] : 0;
-
-    // Bail out if corrupt indices.
-    if (vi0 < 0 || vi0 >= p.numVertices ||
-        vi1 < 0 || vi1 >= p.numVertices ||
-        vi2 < 0 || vi2 >= p.numVertices)
-        return;
-
-    // In instance mode, adjust vertex indices by minibatch index unless broadcasting.
-    if (p.instance_mode && !p.attrBC)
-    {
-        vi0 += pz * p.numVertices;
-        vi1 += pz * p.numVertices;
-        vi2 += pz * p.numVertices;
-    }
-
-    // Pointers to attributes.
-    const float* a0 = p.attr + vi0 * p.numAttr;
-    const float* a1 = p.attr + vi1 * p.numAttr;
-    const float* a2 = p.attr + vi2 * p.numAttr;
-
-    // Barys. If no triangle, force all to zero -> output is zero.
-    float b0 = triValid ? r.x : 0.f;
-    float b1 = triValid ? r.y : 0.f;
-    float b2 = triValid ? (1.f - r.x - r.y) : 0.f;
-
-    // Interpolate and write attributes.
-    for (int i=0; i < p.numAttr; i++)
-        out[i] = b0*a0[i] + b1*a1[i] + b2*a2[i];
-
-    // No diff attrs? Exit.
-    if (!ENABLE_DA)
-        return;
-
-    // Read bary pixel differentials if we have a triangle.
-    float4 db = make_float4(0.f, 0.f, 0.f, 0.f);
-    if (triValid)
-        db = ((float4*)p.rastDB)[pidx];
-
-    // Unpack a bit.
-    float dudx = db.x;
-    float dudy = db.y;
-    float dvdx = db.z;
-    float dvdy = db.w;
-
-    // Calculate the pixel differentials of chosen attributes.    
-    for (int i=0; i < p.numDiffAttr; i++)
-    {   
-        // Input attribute index.
-        int j = p.diff_attrs_all ? i : p.diffAttrs[i];
-        if (j < 0)
-            j += p.numAttr; // Python-style negative indices.
-
-        // Zero output if invalid index.
-        float dsdx = 0.f;
-        float dsdy = 0.f;
-        if (j >= 0 && j < p.numAttr)
-        {
-            float s0 = a0[j];
-            float s1 = a1[j];
-            float s2 = a2[j];
-            float dsdu = s0 - s2;
-            float dsdv = s1 - s2;
-            dsdx = dudx*dsdu + dvdx*dsdv;
-            dsdy = dudy*dsdu + dvdy*dsdv;
-        }
-
-        // Write.
-        outDA[i] = make_float2(dsdx, dsdy);
+        float2* outDA = ((float2*)p.outDA) + pidx * p.numDiffAttr;
+        for (int i = 0; i < p.numDiffAttr; i++)
+            outDA[i] = make_float2(0.f, 0.f);
     }
 }
 
