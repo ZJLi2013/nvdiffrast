@@ -10,28 +10,6 @@
 
 __device__ __inline__ void binRasterImpl(const CRParams p)
 {
-#if defined(__HIP_PLATFORM_AMD__)
-    int thrInBlock = threadIdx.x + threadIdx.y * 32;
-    if (thrInBlock == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
-    {
-#if defined(NVDR_WAVE64)
-        printf("[binRaster] AMD stub active (NVDR_WAVE64)\n");
-#else
-        printf("[binRaster] AMD stub active (wave32)\n");
-#endif
-    }
-    CRAtomics& atomics = p.atomics[blockIdx.z];
-    if (atomics.numSubtris > p.maxSubtris)
-        return;
-    S32* binFirstSeg = (S32*)p.binFirstSeg + CR_MAXBINS_SQR * CR_BIN_STREAMS_SIZE * blockIdx.z;
-    S32* binTotal = (S32*)p.binTotal + CR_MAXBINS_SQR * CR_BIN_STREAMS_SIZE * blockIdx.z;
-    if (thrInBlock < p.numBins)
-    {
-        binFirstSeg[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = -1;
-        binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = 0;
-    }
-    return;
-#else
     __shared__ volatile U32 s_broadcast [CR_BIN_WARPS + 16];
     __shared__ volatile S32 s_outOfs    [CR_MAXBINS_SQR];
     __shared__ volatile S32 s_outTotal  [CR_MAXBINS_SQR];
@@ -440,7 +418,6 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
     // output totals
     if (thrInBlock < p.numBins)
         binTotal[(thrInBlock << CR_BIN_STREAMS_LOG2) + blockIdx.x] = s_outTotal[thrInBlock];
-#endif // !__HIP_PLATFORM_AMD__
 }
 
 //------------------------------------------------------------------------
