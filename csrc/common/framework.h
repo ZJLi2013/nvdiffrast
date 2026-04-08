@@ -28,6 +28,12 @@
 #endif
 #define NVDR_CHECK(COND, ERR) do { TORCH_CHECK(COND, ERR) } while(0)
 #if defined(__HIP_PLATFORM_AMD__) || defined(USE_ROCM)
+#ifndef cudaLaunchKernel
+#define cudaLaunchKernel hipLaunchKernel
+#endif
+#ifndef cudaDeviceSynchronize
+#define cudaDeviceSynchronize hipDeviceSynchronize
+#endif
 #define NVDR_CHECK_CUDA_ERROR(CUDA_CALL) do { hipError_t err = CUDA_CALL; TORCH_CHECK(!err, "HIP error: ", hipGetLastError(), "[", #CUDA_CALL, ";]"); } while(0)
 #else
 #define NVDR_CHECK_CUDA_ERROR(CUDA_CALL) do { cudaError_t err = CUDA_CALL; TORCH_CHECK(!err, "Cuda error: ", cudaGetLastError(), "[", #CUDA_CALL, ";]"); } while(0)
