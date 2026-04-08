@@ -41,7 +41,7 @@ static void set_diff_attrs(InterpolateKernelParams& p, bool diff_attrs_all, std:
 
 std::tuple<torch::Tensor, torch::Tensor> interpolate_fwd_da(torch::Tensor attr, torch::Tensor rast, torch::Tensor tri, torch::Tensor rast_db, bool diff_attrs_all, std::vector<int>& diff_attrs_vec)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(attr));
+    const at::OptionalDeviceGuard device_guard(device_of(attr));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     InterpolateKernelParams p = {}; // Initialize all fields to zero.
     bool enable_da = (rast_db.defined()) && (diff_attrs_all || !diff_attrs_vec.empty());
@@ -136,7 +136,7 @@ std::tuple<torch::Tensor, torch::Tensor> interpolate_fwd(torch::Tensor attr, tor
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> interpolate_grad_da(torch::Tensor attr, torch::Tensor rast, torch::Tensor tri, torch::Tensor dy, torch::Tensor rast_db, torch::Tensor dda, bool diff_attrs_all, std::vector<int>& diff_attrs_vec)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(attr));
+    const at::OptionalDeviceGuard device_guard(device_of(attr));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     InterpolateKernelParams p = {}; // Initialize all fields to zero.
     bool enable_da = (rast_db.defined()) && (diff_attrs_all || !diff_attrs_vec.empty());

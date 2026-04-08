@@ -24,7 +24,7 @@ void AntialiasGradKernel            (const AntialiasKernelParams p);
 
 TopologyHashWrapper antialias_construct_topology_hash(torch::Tensor tri)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(tri));
+    const at::OptionalDeviceGuard device_guard(device_of(tri));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     AntialiasKernelParams p = {}; // Initialize all fields to zero.
 
@@ -67,7 +67,7 @@ TopologyHashWrapper antialias_construct_topology_hash(torch::Tensor tri)
 
 std::tuple<torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, TopologyHashWrapper topology_hash_wrap)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(color));
+    const at::OptionalDeviceGuard device_guard(device_of(color));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     AntialiasKernelParams p = {}; // Initialize all fields to zero.
     p.instance_mode = (pos.sizes().size() > 2) ? 1 : 0;
@@ -159,7 +159,7 @@ std::tuple<torch::Tensor, torch::Tensor> antialias_fwd(torch::Tensor color, torc
 
 std::tuple<torch::Tensor, torch::Tensor> antialias_grad(torch::Tensor color, torch::Tensor rast, torch::Tensor pos, torch::Tensor tri, torch::Tensor dy, torch::Tensor work_buffer)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(color));
+    const at::OptionalDeviceGuard device_guard(device_of(color));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     AntialiasKernelParams p = {}; // Initialize all fields to zero.
     p.instance_mode = (pos.sizes().size() > 2) ? 1 : 0;

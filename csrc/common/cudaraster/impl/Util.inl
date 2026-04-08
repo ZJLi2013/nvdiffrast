@@ -24,10 +24,10 @@ __device__ __inline__ S64   combineLoHi             (S32 lo, S32 hi)        { re
 
 #define HIP_ENABLE_WARP_SYNC_BUILTINS
 
-__device__ __inline__ U32   getLaneMaskLt           (void)                  { return __lanemask_lt(); }
-__device__ __inline__ U32   getLaneMaskLe           (void)                  { return __lanemask_le(); }
-__device__ __inline__ U32   getLaneMaskGt           (void)                  { return __lanemask_gt(); }
-__device__ __inline__ U32   getLaneMaskGe           (void)                  { return __lanemask_ge(); }
+__device__ __inline__ U32   getLaneMaskLt           (void)                  { return (U32)__lanemask_lt(); }
+__device__ __inline__ U32   getLaneMaskLe           (void)                  { return ~(U32)__lanemask_gt(); }
+__device__ __inline__ U32   getLaneMaskGt           (void)                  { return (U32)__lanemask_gt(); }
+__device__ __inline__ U32   getLaneMaskGe           (void)                  { return ~(U32)__lanemask_lt(); }
 __device__ __inline__ int   findLeadingOne          (U32 v)                 { return (v == 0) ? (int)~0u : 31 - __clz(v); }
 __device__ __inline__ bool  singleLane              (void)                  { return ((::__ballot(true) & getLaneMaskLt()) == 0); }
 

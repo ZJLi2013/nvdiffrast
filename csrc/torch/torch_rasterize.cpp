@@ -26,14 +26,14 @@ void RasterizeGradKernelDb(const RasterizeGradParams p);
 
 RasterizeCRStateWrapper::RasterizeCRStateWrapper(int cudaDeviceIdx_)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(cudaDeviceIdx_);
+    const at::OptionalDeviceGuard device_guard(at::Device(at::kCUDA, cudaDeviceIdx_));
     cudaDeviceIdx = cudaDeviceIdx_;
     cr = new CR::CudaRaster();
 }
 
 RasterizeCRStateWrapper::~RasterizeCRStateWrapper(void)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(cudaDeviceIdx);
+    const at::OptionalDeviceGuard device_guard(at::Device(at::kCUDA, cudaDeviceIdx));
     delete cr;
 }
 
@@ -42,7 +42,7 @@ RasterizeCRStateWrapper::~RasterizeCRStateWrapper(void)
 
 std::tuple<torch::Tensor, torch::Tensor> rasterize_fwd_cuda(RasterizeCRStateWrapper& stateWrapper, torch::Tensor pos, torch::Tensor tri, std::tuple<int, int> resolution, torch::Tensor ranges, int peeling_idx)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(pos));
+    const at::OptionalDeviceGuard device_guard(device_of(pos));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     CR::CudaRaster* cr = stateWrapper.cr;
 
@@ -170,7 +170,7 @@ std::tuple<torch::Tensor, torch::Tensor> rasterize_fwd_cuda(RasterizeCRStateWrap
 
 torch::Tensor rasterize_grad_db(torch::Tensor pos, torch::Tensor tri, torch::Tensor out, torch::Tensor dy, torch::Tensor ddb)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(pos));
+    const at::OptionalDeviceGuard device_guard(device_of(pos));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     RasterizeGradParams p;
     bool enable_db = ddb.defined();

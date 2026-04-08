@@ -31,11 +31,14 @@ static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
 { return __any_sync((unsigned long long)mask, pred); }
 static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
 { return (unsigned int)__match_any_sync((unsigned long long)mask, val); }
+static __device__ __forceinline__ void syncwarp_mask(unsigned int mask)
+{ __syncwarp((unsigned long long)mask); }
 }
 #define __ballot_sync(mask, pred)       _nvdr_hip_warp::ballot_sync((unsigned int)(mask), (int)(pred))
 #define __all_sync(mask, pred)          _nvdr_hip_warp::all_sync((unsigned int)(mask), (int)(pred))
 #define __any_sync(mask, pred)          _nvdr_hip_warp::any_sync((unsigned int)(mask), (int)(pred))
 #define __match_any_sync(mask, val)     _nvdr_hip_warp::match_any_sync((unsigned int)(mask), (val))
+#define __syncwarp(mask)                _nvdr_hip_warp::syncwarp_mask((unsigned int)(mask))
 #endif
 #endif
 

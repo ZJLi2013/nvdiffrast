@@ -97,7 +97,7 @@ static void set_modes(TextureKernelParams& p, int filter_mode, int boundary_mode
 
 TextureMipWrapper texture_construct_mip(torch::Tensor tex, int max_mip_level, bool cube_mode)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(tex));
+    const at::OptionalDeviceGuard device_guard(device_of(tex));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     TextureKernelParams p = {}; // Initialize all fields to zero.
     p.mipLevelLimit = max_mip_level;
@@ -173,7 +173,7 @@ TextureMipWrapper texture_construct_mip(torch::Tensor tex, int max_mip_level, bo
 
 torch::Tensor texture_fwd_mip(torch::Tensor tex, torch::Tensor uv, torch::Tensor uv_da, torch::Tensor mip_level_bias, TextureMipWrapper mip_wrapper, std::vector<torch::Tensor> mip_stack, int filter_mode, int boundary_mode)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(tex));
+    const at::OptionalDeviceGuard device_guard(device_of(tex));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     TextureKernelParams p = {}; // Initialize all fields to zero.
     bool has_mip_stack = (mip_stack.size() > 0);
@@ -199,7 +199,7 @@ torch::Tensor texture_fwd_mip(torch::Tensor tex, torch::Tensor uv, torch::Tensor
     {
         if (has_mip_stack)
         {
-            TORCH_CHECK(at::cuda::check_device(mip_stack), __func__, "(): Mip stack inputs must reside on the correct GPU device");
+            TORCH_CHECK(nvdr_check_same_gpu(mip_stack), __func__, "(): Mip stack inputs must reside on the correct GPU device");
             nvdr_check_contiguous(mip_stack, __func__, "(): Mip stack inputs must be contiguous tensors");
             nvdr_check_f32(mip_stack, __func__, "(): Mip stack inputs must be float32 tensors");
         }
@@ -420,7 +420,7 @@ torch::Tensor texture_fwd(torch::Tensor tex, torch::Tensor uv, int filter_mode, 
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, std::vector<torch::Tensor> > texture_grad_linear_mipmap_linear(torch::Tensor tex, torch::Tensor uv, torch::Tensor dy, torch::Tensor uv_da, torch::Tensor mip_level_bias, TextureMipWrapper mip_wrapper, std::vector<torch::Tensor> mip_stack, int filter_mode, int boundary_mode)
 {
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(tex));
+    const at::OptionalDeviceGuard device_guard(device_of(tex));
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     TextureKernelParams p = {}; // Initialize all fields to zero.
     bool has_mip_stack = (mip_stack.size() > 0);
@@ -446,7 +446,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, std::vect
     {
         if (has_mip_stack)
         {
-            TORCH_CHECK(at::cuda::check_device(mip_stack), __func__, "(): Mip stack inputs must reside on the correct GPU device");
+            TORCH_CHECK(nvdr_check_same_gpu(mip_stack), __func__, "(): Mip stack inputs must reside on the correct GPU device");
             nvdr_check_contiguous(mip_stack, __func__, "(): Mip stack inputs must be contiguous tensors");
             nvdr_check_f32(mip_stack, __func__, "(): Mip stack inputs must be float32 tensors");
         }

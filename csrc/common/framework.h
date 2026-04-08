@@ -17,6 +17,7 @@
 #if !defined(__CUDACC__) && !defined(__HIPCC__)
 #include <torch/extension.h>
 #if defined(__HIP_PLATFORM_AMD__) || defined(USE_ROCM)
+#include <hip/hip_runtime_api.h>
 #include <ATen/hip/HIPContext.h>
 #else
 #include <ATen/cuda/CUDAContext.h>
@@ -26,7 +27,11 @@
 #include <pybind11/numpy.h>
 #endif
 #define NVDR_CHECK(COND, ERR) do { TORCH_CHECK(COND, ERR) } while(0)
+#if defined(__HIP_PLATFORM_AMD__) || defined(USE_ROCM)
+#define NVDR_CHECK_CUDA_ERROR(CUDA_CALL) do { hipError_t err = CUDA_CALL; TORCH_CHECK(!err, "HIP error: ", hipGetLastError(), "[", #CUDA_CALL, ";]"); } while(0)
+#else
 #define NVDR_CHECK_CUDA_ERROR(CUDA_CALL) do { cudaError_t err = CUDA_CALL; TORCH_CHECK(!err, "Cuda error: ", cudaGetLastError(), "[", #CUDA_CALL, ";]"); } while(0)
+#endif
 #endif
 
 //------------------------------------------------------------------------

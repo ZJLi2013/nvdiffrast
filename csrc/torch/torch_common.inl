@@ -17,7 +17,15 @@
 #define __func__ __FUNCTION__
 #endif
 
-#define NVDR_CHECK_DEVICE(...) do { TORCH_CHECK(at::cuda::check_device({__VA_ARGS__}), __func__, "(): Inputs " #__VA_ARGS__ " must reside on the same GPU device") } while(0)
+inline bool nvdr_check_same_gpu(at::ArrayRef<at::Tensor> ts) {
+    if (ts.empty()) return true;
+    auto dev = ts[0].device();
+    if (!dev.is_cuda()) return false;
+    for (size_t i = 1; i < ts.size(); i++)
+        if (ts[i].device() != dev) return false;
+    return true;
+}
+#define NVDR_CHECK_DEVICE(...) do { TORCH_CHECK(nvdr_check_same_gpu({__VA_ARGS__}), __func__, "(): Inputs " #__VA_ARGS__ " must reside on the same GPU device") } while(0)
 #define NVDR_CHECK_CPU(...) do { nvdr_check_cpu({__VA_ARGS__}, __func__, "(): Inputs " #__VA_ARGS__ " must reside on CPU"); } while(0)
 #define NVDR_CHECK_CONTIGUOUS(...) do { nvdr_check_contiguous({__VA_ARGS__}, __func__, "(): Inputs " #__VA_ARGS__ " must be contiguous tensors"); } while(0)
 #define NVDR_CHECK_F32(...) do { nvdr_check_f32({__VA_ARGS__}, __func__, "(): Inputs " #__VA_ARGS__ " must be float32 tensors"); } while(0)
