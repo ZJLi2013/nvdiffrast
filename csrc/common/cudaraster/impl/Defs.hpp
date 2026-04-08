@@ -45,27 +45,33 @@ static __device__ __forceinline__ int _half()
 
 static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
 {
-    unsigned long long full = __ballot_sync(0xFFFFFFFFFFFFFFFFULL, pred);
+    unsigned long long full = __builtin_amdgcn_ballot_w64(pred != 0);
     return ((unsigned int)(full >> (_half() * 32))) & mask;
 }
 
-static __device__ __forceinline__ bool all_sync(unsigned int mask, int pred)
-{ return ballot_sync(mask, pred) == mask; }
+static __device__ __forceinline__ bool all_sync(unsigned int /*mask*/, int pred)
+{ return __all(pred); }
 
-static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
-{ return ballot_sync(mask, pred) != 0; }
+static __device__ __forceinline__ bool any_sync(unsigned int /*mask*/, int pred)
+{ return __any(pred); }
 
 static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
 {
-    unsigned long long full = __match_any_sync(0xFFFFFFFFFFFFFFFFULL, val);
-    return ((unsigned int)(full >> (_half() * 32))) & mask;
+    unsigned int result = ~0u;
+    for (int bit = 0; bit < 32; ++bit)
+    {
+        int b = (val >> bit) & 1;
+        unsigned int m = ballot_sync(~0u, b);
+        result &= b ? m : ~m;
+    }
+    return result & mask;
 }
 
 static __device__ __forceinline__ void syncwarp_nomask()
-{ __syncwarp(); }
+{ __builtin_amdgcn_wave_barrier(); }
 
 static __device__ __forceinline__ void syncwarp_mask(unsigned int /*mask*/)
-{ __syncwarp(); }
+{ __builtin_amdgcn_wave_barrier(); }
 }
 
 #else // wave32 (RDNA)

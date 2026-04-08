@@ -35,7 +35,7 @@ __device__ __inline__ U32   getLaneMaskGt           (void)                  { re
 __device__ __inline__ U32   getLaneMaskGe           (void)                  { return ~((1u << threadIdx.x) - 1); }
 __device__ __inline__ int   findLeadingOne          (U32 v)                 { return (v == 0) ? (int)~0u : 31 - __clz(v); }
 __device__ __inline__ bool  singleLane              (void)                  {
-    U32 half = (U32)(__ballot_sync(0xFFFFFFFFFFFFFFFFULL, true) >> ((__lane_id() >> 5) * 32));
+    U32 half = (U32)(__builtin_amdgcn_ballot_w64(true) >> ((__lane_id() >> 5) * 32));
     return (half & getLaneMaskLt()) == 0;
 }
 #else
