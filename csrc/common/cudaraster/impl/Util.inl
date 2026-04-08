@@ -22,7 +22,9 @@ __device__ __inline__ U64   combineLoHi             (U32 lo, U32 hi)        { re
 __device__ __inline__ S64   combineLoHi             (S32 lo, S32 hi)        { return __double_as_longlong(__hiloint2double(hi, lo)); }
 #if defined(__HIP_PLATFORM_AMD__)
 
+#ifndef HIP_ENABLE_WARP_SYNC_BUILTINS
 #define HIP_ENABLE_WARP_SYNC_BUILTINS
+#endif
 
 __device__ __inline__ U32   getLaneMaskLt           (void)                  { return (U32)__lanemask_lt(); }
 __device__ __inline__ U32   getLaneMaskLe           (void)                  { return ~(U32)__lanemask_gt(); }

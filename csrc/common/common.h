@@ -31,6 +31,8 @@ static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
 { return __any_sync((unsigned long long)mask, pred); }
 static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
 { return (unsigned int)__match_any_sync((unsigned long long)mask, val); }
+static __device__ __forceinline__ void syncwarp_nomask()
+{ __syncwarp(); }
 static __device__ __forceinline__ void syncwarp_mask(unsigned int mask)
 { __syncwarp((unsigned long long)mask); }
 }
@@ -38,7 +40,8 @@ static __device__ __forceinline__ void syncwarp_mask(unsigned int mask)
 #define __all_sync(mask, pred)          _nvdr_hip_warp::all_sync((unsigned int)(mask), (int)(pred))
 #define __any_sync(mask, pred)          _nvdr_hip_warp::any_sync((unsigned int)(mask), (int)(pred))
 #define __match_any_sync(mask, val)     _nvdr_hip_warp::match_any_sync((unsigned int)(mask), (val))
-#define __syncwarp(mask)                _nvdr_hip_warp::syncwarp_mask((unsigned int)(mask))
+#define _NVDR_SW_SEL(_0, _1, N, ...) N
+#define __syncwarp(...) _NVDR_SW_SEL(dummy, ##__VA_ARGS__, _nvdr_hip_warp::syncwarp_mask, _nvdr_hip_warp::syncwarp_nomask)(__VA_ARGS__)
 #endif
 #endif
 
