@@ -36,7 +36,11 @@ static __forceinline__ __device__ void InterpolateFwdKernelTemplate(const Interp
 
     // If no geometry in entire warp, zero the output and exit.
     // Otherwise force barys to zero and output with live threads.
+#if defined(__HIP_PLATFORM_AMD__) && __AMDGCN_WAVEFRONT_SIZE == 64
+    if (!triValid)
+#else
     if (__all_sync(0xffffffffu, !triValid))
+#endif
     {
         for (int i=0; i < p.numAttr; i++)
             out[i] = 0.f;
