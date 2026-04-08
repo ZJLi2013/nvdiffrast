@@ -19,34 +19,6 @@ __device__ __inline__ int globalTileIdx(int tileInBin, int widthTiles)
 
 __device__ __inline__ void coarseRasterImpl(const CRParams p)
 {
-#if defined(__HIP_PLATFORM_AMD__)
-    CRAtomics& atomics = p.atomics[blockIdx.z];
-    if (atomics.numSubtris > p.maxSubtris || atomics.numBinSegs > p.maxBinSegs)
-        return;
-
-    if (blockIdx.x == 0)
-    {
-        int thrInBlock = threadIdx.x + threadIdx.y * 32;
-        S32* activeTilesOut  = (S32*)p.activeTiles  + CR_MAXTILES_SQR * blockIdx.z;
-        S32* tileFirstSegOut = (S32*)p.tileFirstSeg + CR_MAXTILES_SQR * blockIdx.z;
-
-        for (int i = thrInBlock; i < p.numTiles; i += 32 * CR_COARSE_WARPS)
-        {
-            activeTilesOut[i] = i;
-            tileFirstSegOut[i] = -1;
-        }
-
-        __syncthreads();
-        if (thrInBlock == 0)
-        {
-#if defined(NVDR_WAVE64)
-            printf("[coarseRaster] AMD stub active (wave64)\n");
-#endif
-            atomics.numActiveTiles = p.numTiles;
-        }
-    }
-    return;
-#else
     // Common.
 
     __shared__ volatile U32 s_workCounter;
@@ -753,7 +725,6 @@ __device__ __inline__ void coarseRasterImpl(const CRParams p)
             }
         }
     }
-#endif // !__HIP_PLATFORM_AMD__
 }
 
 //------------------------------------------------------------------------
