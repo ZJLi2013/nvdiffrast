@@ -289,7 +289,7 @@ static __device__ __forceinline__ float triidx_to_float(int x)   { if (x <= 0x01
 //------------------------------------------------------------------------
 // Coalesced atomics. These are all done via macros.
 
-#if (__CUDA_ARCH__ >= 700 || defined(__HIP_DEVICE_COMPILE__)) && !defined(__HIP_PLATFORM_AMD__)
+#if __CUDA_ARCH__ >= 700 || defined(__HIP_DEVICE_COMPILE__)
 
 #define CA_TEMP       _ca_temp
 #define CA_TEMP_PARAM float* CA_TEMP

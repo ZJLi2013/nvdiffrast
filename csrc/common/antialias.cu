@@ -399,12 +399,18 @@ __global__ void AntialiasGradKernel(const AntialiasKernelParams p)
         if (threadIdx.x == 0)
             s_base = atomicAdd(&p.workBuffer[0].y, AA_GRAD_KERNEL_THREADS_PER_BLOCK);
         __syncthreads();
-        int thread_idx = s_base + threadIdx.x;
-        if (thread_idx >= workCount)
+
+        // On AMD, s_barrier doesn't handle partially-exited wavefronts.
+        // Ensure ALL threads in the block return together to avoid deadlock.
+        if (s_base >= workCount)
             return;
 
+        int thread_idx = s_base + threadIdx.x;
+
         // Read work item filled out by forward kernel.
-        int4 item = p.workBuffer[thread_idx + 1];
+        int4 item = {0, 0, 0, 0};
+        if (thread_idx < workCount)
+            item = p.workBuffer[thread_idx + 1];
         unsigned int amask = __ballot_sync(0xffffffffu, item.w);
         if (item.w == 0)
             continue; // No effect.
