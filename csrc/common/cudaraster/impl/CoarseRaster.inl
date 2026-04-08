@@ -39,8 +39,8 @@ __device__ __inline__ void coarseRasterImpl(const CRParams p)
         __syncthreads();
         if (thrInBlock == 0)
         {
-#if __AMDGCN_WAVEFRONT_SIZE == 64
-            printf("[coarseRaster] AMD stub active (wave64), numTiles=%d\n", p.numTiles);
+#if defined(NVDR_WAVE64)
+            printf("[coarseRaster] AMD stub active (wave64)\n");
 #endif
             atomics.numActiveTiles = p.numTiles;
         }

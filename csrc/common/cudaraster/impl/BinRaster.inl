@@ -14,18 +14,10 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
     int thrInBlock = threadIdx.x + threadIdx.y * 32;
     if (thrInBlock == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
     {
-        int ws = (int)warpSize;
-        int lid = (int)__lane_id();
-        printf("[binRaster] warpSize=%d lane=%d\n", ws, lid);
-#ifdef __AMDGCN_WAVEFRONT_SIZE
-        printf("[binRaster] WAVEFRONT_SIZE=%d\n", (int)__AMDGCN_WAVEFRONT_SIZE);
-#elif defined(__AMDGCN_WAVEFRONT_SIZE__)
-        printf("[binRaster] WAVEFRONT_SIZE__=%d\n", (int)__AMDGCN_WAVEFRONT_SIZE__);
+#if defined(NVDR_WAVE64)
+        printf("[binRaster] AMD stub active (NVDR_WAVE64)\n");
 #else
-        printf("[binRaster] no WAVEFRONT_SIZE macro\n");
-#endif
-#ifdef __gfx942__
-        printf("[binRaster] __gfx942__\n");
+        printf("[binRaster] AMD stub active (wave32)\n");
 #endif
     }
     CRAtomics& atomics = p.atomics[blockIdx.z];

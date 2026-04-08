@@ -26,7 +26,7 @@ __device__ __inline__ S64   combineLoHi             (S32 lo, S32 hi)        { re
 #define HIP_ENABLE_WARP_SYNC_BUILTINS
 #endif
 
-#if __AMDGCN_WAVEFRONT_SIZE == 64
+#if defined(NVDR_WAVE64)
 // CDNA (wave64): lane masks must be relative to the 32-thread logical warp,
 // not the full 64-lane wavefront.  Compute from threadIdx.x directly.
 __device__ __inline__ U32   getLaneMaskLt           (void)                  { return (1u << threadIdx.x) - 1; }

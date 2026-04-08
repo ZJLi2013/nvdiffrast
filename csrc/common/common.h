@@ -28,7 +28,11 @@
 #ifndef NVDR_HIP_WARP_COMPAT_DEFINED
 #define NVDR_HIP_WARP_COMPAT_DEFINED
 
-#if __AMDGCN_WAVEFRONT_SIZE == 64
+#if defined(__gfx908__) || defined(__gfx90a__) || defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)
+#define NVDR_WAVE64 1
+#endif
+
+#if defined(NVDR_WAVE64)
 
 namespace _nvdr_hip_warp {
 
@@ -89,7 +93,7 @@ static __device__ __forceinline__ void syncwarp_mask(unsigned int mask)
 { __syncwarp((unsigned long long)mask); }
 }
 
-#endif // __AMDGCN_WAVEFRONT_SIZE
+#endif // NVDR_WAVE64
 
 #define __ballot_sync(mask, pred)       _nvdr_hip_warp::ballot_sync((unsigned int)(mask), (int)(pred))
 #define __all_sync(mask, pred)          _nvdr_hip_warp::all_sync((unsigned int)(mask), (int)(pred))
