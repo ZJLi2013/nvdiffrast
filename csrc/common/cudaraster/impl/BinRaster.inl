@@ -13,7 +13,11 @@ __device__ __inline__ void binRasterImpl(const CRParams p)
 #if defined(__HIP_PLATFORM_AMD__)
     int thrInBlock = threadIdx.x + threadIdx.y * 32;
     if (thrInBlock == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0)
-        printf("[binRaster] AMD stub active (wave%d)\n", __AMDGCN_WAVEFRONT_SIZE);
+#if __AMDGCN_WAVEFRONT_SIZE == 64
+        printf("[binRaster] AMD stub active (wave64)\n");
+#else
+        printf("[binRaster] AMD stub active (wave32)\n");
+#endif
     CRAtomics& atomics = p.atomics[blockIdx.z];
     if (atomics.numSubtris > p.maxSubtris)
         return;
