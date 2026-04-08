@@ -348,7 +348,6 @@ void RasterImpl::launchStages(bool instanceMode, bool peel, cudaStream_t stream)
         if (instanceMode)
         {
             int setupBlocks = (m_numTriangles - 1) / (32 * CR_SETUP_WARPS) + 1;
-            fprintf(stderr, "[CR] triangleSetup: blocks=%d warps=%d images=%d\n", setupBlocks, CR_SETUP_WARPS, m_numImages);
             NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)triangleSetupKernel, dim3(setupBlocks, 1, m_numImages), dim3(32, CR_SETUP_WARPS), args, 0, stream));
         }
         else
@@ -356,30 +355,18 @@ void RasterImpl::launchStages(bool instanceMode, bool peel, cudaStream_t stream)
             for (int i=0; i < m_numImages; i++)
                 p.totalCount += imageParams[i].triCount;
             int setupBlocks = (p.totalCount - 1) / (32 * CR_SETUP_WARPS) + 1;
-            fprintf(stderr, "[CR] triangleSetup: blocks=%d warps=%d total=%d\n", setupBlocks, CR_SETUP_WARPS, p.totalCount);
             NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)triangleSetupKernel, dim3(setupBlocks, 1, 1), dim3(32, CR_SETUP_WARPS), args, 0, stream));
         }
-        NVDR_CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-        fprintf(stderr, "[CR] triangleSetup OK (err=%d)\n", (int)cudaGetLastError());
 
-        fprintf(stderr, "[CR] binRaster: streams=%d warps=%d\n", CR_BIN_STREAMS_SIZE, CR_BIN_WARPS);
         NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)binRasterKernel, dim3(CR_BIN_STREAMS_SIZE, 1, m_numImages), brBlock, args, 0, stream));
-        NVDR_CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-        fprintf(stderr, "[CR] binRaster OK (err=%d)\n", (int)cudaGetLastError());
 
-        fprintf(stderr, "[CR] coarseRaster: blocks=%d warps=%d\n", m_numSMs * m_numCoarseBlocksPerSM, CR_COARSE_WARPS);
         NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)coarseRasterKernel, dim3(m_numSMs * m_numCoarseBlocksPerSM, 1, m_numImages), crBlock, args, 0, stream));
-        NVDR_CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-        fprintf(stderr, "[CR] coarseRaster OK (err=%d)\n", (int)cudaGetLastError());
 
         NVDR_CHECK_CUDA_ERROR(cudaMemcpyAsync(m_crAtomicsHost.getPtr(), m_crAtomics.getPtr(), sizeof(CRAtomics) * m_numImages, cudaMemcpyDeviceToHost, stream));
     }
 
     // Fine rasterizer is launched always.
-    fprintf(stderr, "[CR] fineRaster: blocks=%d warps=%d\n", m_numSMs * m_numFineBlocksPerSM, m_numFineWarpsPerBlock);
     NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)fineRasterKernel, dim3(m_numSMs * m_numFineBlocksPerSM, 1, m_numImages), frBlock, args, 0, stream));
-    NVDR_CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-    fprintf(stderr, "[CR] fineRaster OK (err=%d)\n", (int)cudaGetLastError());
     NVDR_CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
 }
 
