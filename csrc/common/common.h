@@ -76,21 +76,53 @@ static __device__ __forceinline__ void syncwarp_mask(unsigned int /*mask*/)
 
 }
 
-#else // wave32 (RDNA)
+#else // wave32 (RDNA) — also used in hipcc host phase when __gfx942__ is not yet defined
 
 namespace _nvdr_hip_warp {
 static __device__ __forceinline__ unsigned int ballot_sync(unsigned int mask, int pred)
-{ return (unsigned int)__ballot_sync((unsigned long long)mask, pred); }
+{
+#ifdef __HIP_DEVICE_COMPILE__
+    return (unsigned int)__ballot_sync((unsigned long long)mask, pred);
+#else
+    return 0;
+#endif
+}
 static __device__ __forceinline__ bool all_sync(unsigned int mask, int pred)
-{ return __all_sync((unsigned long long)mask, pred); }
+{
+#ifdef __HIP_DEVICE_COMPILE__
+    return __all_sync((unsigned long long)mask, pred);
+#else
+    return false;
+#endif
+}
 static __device__ __forceinline__ bool any_sync(unsigned int mask, int pred)
-{ return __any_sync((unsigned long long)mask, pred); }
+{
+#ifdef __HIP_DEVICE_COMPILE__
+    return __any_sync((unsigned long long)mask, pred);
+#else
+    return false;
+#endif
+}
 static __device__ __forceinline__ unsigned int match_any_sync(unsigned int mask, unsigned int val)
-{ return (unsigned int)__match_any_sync((unsigned long long)mask, val); }
+{
+#ifdef __HIP_DEVICE_COMPILE__
+    return (unsigned int)__match_any_sync((unsigned long long)mask, val);
+#else
+    return 0;
+#endif
+}
 static __device__ __forceinline__ void syncwarp_nomask()
-{ __syncwarp(); }
-static __device__ __forceinline__ void syncwarp_mask(unsigned int mask)
-{ __syncwarp((unsigned long long)mask); }
+{
+#ifdef __HIP_DEVICE_COMPILE__
+    __builtin_amdgcn_wave_barrier();
+#endif
+}
+static __device__ __forceinline__ void syncwarp_mask(unsigned int /*mask*/)
+{
+#ifdef __HIP_DEVICE_COMPILE__
+    __builtin_amdgcn_wave_barrier();
+#endif
+}
 }
 
 #endif // NVDR_WAVE64
