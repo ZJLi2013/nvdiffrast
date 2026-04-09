@@ -6,7 +6,7 @@
 |-----|------|---------|------|----------|------|
 | Exp-1 | nvdiffrast 可在 RDNA4 (RX 9700) + ROCm 上编译安装 | gfx1201 (wave32) | ✅ done | — | — |
 | Exp-2 | 基础功能在 RDNA4 上测试通过 | gfx1201 (wave32) | ✅ done | 全 4 模块 PASS | ROCm 7.2.1 + PyTorch 2.9.1 验证 |
-| Exp-3 | 半wavefront模拟使 cudaraster 在 CDNA3 wave64 上正确运行 | gfx942 (wave64) | ✅ done | 全 8 项 PASS (含 cudaraster + antialias grad) | MI308XHF, ROCm 7.2.1 + PyTorch 2.9.1 |
+| Exp-3 | 半wavefront模拟使 cudaraster 在 CDNA3 wave64 上正确运行 | gfx942 (wave64) | ✅ done | 全 8 项 PASS (含 cudaraster + antialias grad) | MI308XHF; ROCm 6.4 + 7.2 均兼容 |
 
 ---
 
@@ -39,12 +39,12 @@ U32 actMask = __ballot_sync(~0u, act);
 
 | 要素 | NVIDIA (warp32) | RDNA3/4 (wave32) | CDNA3 gfx942 (wave64) |
 |------|----------------|-------------------|------------------------|
-| **wavefront/warp 大小** | 32 | **32 ✅ 完美匹配** | 64 ❌ 不兼容 |
-| **`__ballot_sync()` 返回** | U32 | **U32 ✅** | U64 → 存入 U32 截断 ❌ |
-| **scan 偏移量 1,2,4,8,16** | 正确 (log2(32)=5) | **正确 ✅** | 缺少 32 步 (需 log2(64)=6) ❌ |
-| **`getLaneMaskLt()` 类型** | U32 | **U32 ✅** | U64 → 类型不兼容 ❌ |
-| **`__syncwarp()`** | 同步 warp | no-op (lockstep) ✅ | 同步整个 wave64 (含 2 个逻辑 warp) ⚠️ |
-| **thread→lane 映射** | 1:1 | **1:1 ✅** | 2 个 warp32 打包进 1 个 wave64 ⚠️ |
+| **wavefront/warp 大小** | 32 | **32 ✅ 完美匹配** | 64 → **✅ 半wavefront模拟** |
+| **`__ballot_sync()` 返回** | U32 | **U32 ✅** | U64 → **✅** `ballot_w64 >> (half*32)` |
+| **scan 偏移量 1,2,4,8,16** | 正确 (log2(32)=5) | **正确 ✅** | **✅** 各行独立，偏移量不变 |
+| **`getLaneMaskLt()` 类型** | U32 | **U32 ✅** | **✅** `(1u << threadIdx.x) - 1` |
+| **`__syncwarp()`** | 同步 warp | no-op (lockstep) ✅ | **✅** `wave_barrier()` (更强) |
+| **thread→lane 映射** | 1:1 | **1:1 ✅** | **✅** `__lane_id() >> 5` 判断半段 |
 | **PTX inline asm** | 原生 | 需 C++/HIP 替代 | 同样需 C++/HIP 替代 |
 
 ### RDNA3/4 迁移工作量
@@ -136,13 +136,14 @@ nvdiffrast 包含 **1 个 CUDA 扩展** (`_nvdiffrast_c`)：
 | **工作目录** | `/home/david/` |
 | **ROCm 版本** | 待确认 (需 SSH 检查) |
 
-### CDNA3 测试节点 (待定)
+### CDNA3 测试节点 ✅
 
 | 属性 | 值 |
 |------|-----|
-| **节点** | banff-sc-cs41-29 |
-| **GPU** | AMD MI300X (CDNA3, gfx942, wave64) |
-| **状态** | 暂缓 — 需 cudaraster wave64 适配 |
+| **节点** | banff-sc-cs41-29.dh170.dcgpu |
+| **GPU** | AMD MI308XHF (CDNA3, gfx942, wave64) |
+| **Docker** | `rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0` 或 `rocm7.2.1_..._2.9.1` |
+| **状态** | ✅ 全 8 项 PASS — wave64 半wavefront模拟 |
 
 ---
 
@@ -239,54 +240,30 @@ print("ALL TESTS PASSED")
 
 ---
 
-## TODO: CDNA3 (gfx942) wave64 适配
+## ~~TODO~~ DONE: CDNA3 (gfx942) wave64 适配 → ✅ Exp-3
 
-### 核心问题
+### 核心问题 (已解决)
 
 CDNA3 (MI300X, gfx942) **仅支持 wave64**，不支持 wave32 模式
 ([LLVM 确认](https://github.com/llvm/llvm-project/pull/140185))。
-cudaraster 硬编码 warp32，导致以下根本性不兼容：
+cudaraster 硬编码 warp32，存在以下不兼容问题 — **全部通过方案 A (半wavefront模拟) 解决**：
 
-1. **`__ballot_sync()` 返回 U64**：~50 处存入 U32 变量 → 截断高 32 位 → 错误结果
-2. **Warp scan/reduce 偏移量**：1,2,4,8,16 (5 步) → wave64 需 1,2,4,8,16,**32** (6 步)
-3. **Thread 映射**：wave64 将 2 个逻辑 warp32 (相邻 threadIdx.y) 打包进 1 个 wavefront
-4. **共享内存布局**：按 32-lane warp 分配，wave64 下可能地址冲突
+1. ~~`__ballot_sync()` 返回 U64~~ → `__builtin_amdgcn_ballot_w64` + `>> (half * 32)` 提取 32-bit
+2. ~~Warp scan 偏移量 1-16 不够~~ → 各行独立、`blockDim.x=32` 下 scan 偏移不变
+3. ~~Thread 映射不兼容~~ → `__lane_id() >> 5` 判断半段
+4. ~~共享内存布局冲突~~ → 实际无冲突 (cudaraster 按 threadIdx.y 分行)
 
-### 候选方案
+### 选用方案: A (半wavefront模拟) ✅
 
-| 方案 | 工作量 | 风险 | 说明 |
-|------|--------|------|------|
-| **A: 半 wavefront 模拟** | 1-2 周 | 高 | 每个 wave64 内模拟 2 个 warp32；`(U32)(ballot >> (threadIdx.y & 1) * 32)` 提取正确半掩码 |
-| **B: 完整 wave64 重写** | 3-4 周 | 中 | 所有 U32 mask→U64，scan 扩展 6 步，~200+ 处修改 |
-| **C: 仅移植非 cudaraster 部分** | 2-3 天 | 低 | antialias + interpolate + texture 可用，但无 rasterize |
+实际实现确认：
+- `ballot_sync(mask, pred)` → 从 `__builtin_amdgcn_ballot_w64(pred)` 提取 `half = __lane_id() >> 5` 对应的 32-bit
+- `all_sync / any_sync` → 通过 `ballot_sync` 推导
+- `match_any_sync` → 逐 bit `ballot_sync` (32 步循环)
+- `getLaneMaskLt()` → `(1u << threadIdx.x) - 1`
+- `syncwarp()` → `__builtin_amdgcn_wave_barrier()` (比原始 warp sync 更强)
+- Antialias gradient: persistent threads 改为 block 级别统一退出
 
-### 半 wavefront 模拟思路 (方案 A)
-
-```cpp
-// wave64 上，blockDim.x=32 时:
-// wavefront 0 = threadIdx.y=0 (lanes 0-31) + threadIdx.y=1 (lanes 32-63)
-// wavefront 1 = threadIdx.y=2 (lanes 0-31) + threadIdx.y=3 (lanes 32-63)
-
-#if defined(__HIP_PLATFORM_AMD__) && __AMDGCN_WAVEFRONT_SIZE == 64
-static __device__ __inline__ U32 nvdr_ballot(bool pred) {
-    unsigned long long full = __ballot(pred);
-    return (U32)(full >> ((threadIdx.y & 1) * 32));
-}
-static __device__ __inline__ U32 nvdr_getLaneMaskLt() {
-    return (1u << threadIdx.x) - 1;
-}
-#else
-#define nvdr_ballot(pred) __ballot_sync(~0u, pred)
-#define nvdr_getLaneMaskLt() getLaneMaskLt()
-#endif
-```
-
-**风险**：依赖 thread→lane 映射假设（blockDim.x 必须恰好 = 32），
-且 `__syncwarp(mask)` 实际同步整个 wave64 而非半个，可能引入隐式依赖 bug。
-
-### 决策
-暂缓 CDNA3 适配，优先完成 RDNA3/4 验证。后续根据下游需求 (TRELLIS.2 等)
-评估 CDNA3 投入产出比。
+详见 [Exp-3](#exp-3-cdna3-gfx942-wave64-半wavefront模拟编译--功能验证)。
 
 ---
 
@@ -374,10 +351,11 @@ wave64；使用 `__lane_id() >> 5` 判断当前线程在哪半个 wavefront，�
 
 ### 环境
 - **节点**: banff-sc-cs41-29.dh170.dcgpu (MI308XHF, gfx942, wave64)
-- **Docker**: `rocm/pytorch:rocm7.2.1_ubuntu24.04_py3.12_pytorch_release_2.9.1`
-- **ROCm**: 7.2.1 (hipcc 7.2.53211)
-- **PyTorch**: 2.9.1+rocm7.2.1
-- **编译**: `GPU_ARCHS=gfx942 pip install . --no-build-isolation`
+- **Docker (功能测试)**: `rocm/pytorch:rocm7.2.1_ubuntu24.04_py3.12_pytorch_release_2.9.1`
+- **Docker (兼容性测试)**: `rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0`
+- **ROCm**: 6.4.3 / 7.2.1 均兼容
+- **PyTorch**: 2.6.0 / 2.9.1 均兼容
+- **编译**: `GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@cdna3 --no-build-isolation`
 - **测试脚本**: `scripts/cdna3_build_test.sh`
 
 ### 预期
@@ -409,6 +387,8 @@ wave64；使用 `__lane_id() >> 5` 判断当前线程在哪半个 wavefront，�
 | 4 | `all_sync`/`any_sync` 原生 HIP 函数对半wavefront语义不正确 | `Defs.hpp`, `common.h` | 改用 `ballot_sync` 推导 |
 | 5 | Build cache 不感知 `.inl` 文件变更 | `scripts/cdna3_build_test.sh` | `rm -rf build/ dist/ *.egg-info` 强制 clean build |
 | 6 | Antialias gradient kernel 持久线程模式死锁 | `antialias.cu` | `__syncthreads()`/`s_barrier` 不处理提前退出的 wavefront → 改为 block 级别统一退出 (`s_base >= workCount` 时 return) |
+| 7 | `cudaLaunchKernel` 在 ROCm 6.4 上未映射 | `framework.h` | 添加 `#define cudaLaunchKernel hipLaunchKernel` + `cudaDeviceSynchronize` (ROCm 7.2 自动提供) |
+| 8 | wave32 fallback 中 `__syncwarp` 在 hipcc host phase 不可用 (ROCm 6.4) | `common.h`, `Defs.hpp` | wave32 path 函数体包裹 `#ifdef __HIP_DEVICE_COMPILE__`；`syncwarp` 改用 `__builtin_amdgcn_wave_barrier()` |
 
 ### 调试追踪
 
@@ -426,3 +406,19 @@ wave64；使用 `__lane_id() >> 5` 判断当前线程在哪半个 wavefront，�
 
 ### 结论
 方案 A (半wavefront模拟) 可行。wave64 CDNA3 上 cudaraster 全部四个阶段 (triangleSetup, binRaster, coarseRaster, fineRaster) + interpolate + antialias (含 gradient) + texture 均正常工作。
+
+ROCm 版本兼容性：
+- **ROCm 7.2** (PyTorch 2.9): 首次验证环境，8/8 tests PASS
+- **ROCm 6.4** (PyTorch 2.6): 需额外修复 `cudaLaunchKernel` 映射 + hipcc host phase `__syncwarp` guard，编译 + import 验证通过
+
+### 使用指南
+
+| 架构 | 安装命令 | 分支 | 说明 |
+|------|---------|------|------|
+| **RDNA4** (gfx1201) | `GPU_ARCHS=gfx1201 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation` | `rocm` | wave32，与 NVIDIA warp32 语义一致 |
+| **RDNA3** (gfx1100) | `GPU_ARCHS=gfx1100 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation` | `rocm` | 同上 |
+| **CDNA3** (gfx942) | `GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@cdna3 --no-build-isolation` | `cdna3` | wave64 半wavefront模拟 |
+
+ROCm Docker 推荐镜像：
+- `rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0` (CDNA3 推荐，有 flash-attn AMD wheel)
+- `rocm/pytorch:rocm7.2.1_ubuntu24.04_py3.12_pytorch_release_2.9.1` (CDNA3 + RDNA4 通用)
