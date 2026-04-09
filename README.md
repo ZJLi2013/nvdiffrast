@@ -23,45 +23,31 @@ pip install git+https://github.com/NVlabs/nvdiffrast.git --no-build-isolation
 
 ### Install (AMD GPU &ndash; ROCm, this fork)
 
-This fork has two branches for AMD GPU support:
+```bash
+# Set GPU_ARCHS to your target architecture
+GPU_ARCHS=<arch> pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation
+```
 
-| Branch | Target | Wave size | Verified environment |
-|--------|--------|-----------|---------------------|
-| **`rocm`** | RDNA3/4 (gfx1100, gfx1201) | wave32 | ROCm 7.2, PyTorch 2.9 |
-| **`cdna3`** | CDNA3 (gfx942) + RDNA3/4 | wave64 + wave32 | ROCm 6.4 / 7.2, PyTorch 2.6 / 2.9 |
+| Architecture | `GPU_ARCHS` | GPU examples | Wave size | ROCm | Status |
+|---|---|---|---|---|---|
+| RDNA3 | `gfx1100` | RX 7900 XTX, W7900 | wave32 | 6.4 / 7.2 | Supported |
+| RDNA4 | `gfx1201` | Radeon AI PRO R9700 | wave32 | 7.2 | Tested &check; |
+| CDNA3 | `gfx942` | MI300X, MI308X | wave64 | 6.4 / 7.2 | Tested &check; |
 
-#### RDNA4 (RX 9700, gfx1201) &mdash; Consumer GPU, wave32
+**Examples:**
 
 ```bash
-# Use the 'rocm' branch
+# RDNA4 consumer GPU
 GPU_ARCHS=gfx1201 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation
+
+# CDNA3 data-center GPU (MI300X)
+GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation
 ```
 
-#### RDNA3 (RX 7900 XTX, W7900, gfx1100) &mdash; Consumer GPU, wave32
-
-```bash
-GPU_ARCHS=gfx1100 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation
-```
-
-#### CDNA3 (MI300X/MI308X, gfx942) &mdash; Data-center GPU, wave64
-
-```bash
-# Use the 'cdna3' branch — includes wave64 half-wavefront emulation
-GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@cdna3 --no-build-isolation
-```
-
-The `cdna3` branch implements **half-wavefront emulation**: each wave64 is treated as two
-logical warp32 groups, and 64-bit collective results (`__ballot`, `__match_any`) are split
-to extract the correct 32-bit portion per half. This allows cudaraster's warp32-hardcoded
-algorithms to run unmodified on wave64 hardware.
-
-**Supported AMD architectures:**
-
-| Architecture | GPU examples | Wave size | Branch | Status |
-|---|---|---|---|---|
-| RDNA3 (gfx1100) | RX 7900 XTX, W7900 | wave32 | `rocm` | Supported |
-| RDNA4 (gfx1201) | Radeon AI PRO R9700 | wave32 | `rocm` | Tested &check; |
-| CDNA3 (gfx942) | MI300X, MI308X | wave64 | `cdna3` | Tested &check; |
+For CDNA3 (wave64), the `rocm` branch automatically activates **half-wavefront emulation**:
+each wave64 is treated as two logical warp32 groups, and 64-bit collective results
+(`__ballot`, `__match_any`) are split to extract the correct 32-bit portion per half.
+This allows cudaraster's warp32-hardcoded algorithms to run unmodified on wave64 hardware.
 
 **Verified modules** (all architectures): `rasterize`, `interpolate`, `antialias` (fwd+bwd), `texture`
 

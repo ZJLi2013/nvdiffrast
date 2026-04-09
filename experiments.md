@@ -318,7 +318,7 @@ nvdiffrast **全部 4 个模块** (rasterize, interpolate, antialias, texture)
 ## Exp-3: CDNA3 (gfx942) wave64 半wavefront模拟编译 + 功能验证
 
 **日期**: 2026-04-08
-**分支**: `cdna3` (from `rocm`)
+**分支**: `rocm` (原 `cdna3` 分支已合并回 `rocm`)
 
 ### 假设
 通过半wavefront模拟 (half-wavefront emulation)，cudaraster 的 warp32 算法可以在 wave64 架构
@@ -355,7 +355,7 @@ wave64；使用 `__lane_id() >> 5` 判断当前线程在哪半个 wavefront，�
 - **Docker (兼容性测试)**: `rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0`
 - **ROCm**: 6.4.3 / 7.2.1 均兼容
 - **PyTorch**: 2.6.0 / 2.9.1 均兼容
-- **编译**: `GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@cdna3 --no-build-isolation`
+- **编译**: `GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation`
 - **测试脚本**: `scripts/cdna3_build_test.sh`
 
 ### 预期
@@ -417,7 +417,7 @@ ROCm 版本兼容性：
 |------|---------|------|------|
 | **RDNA4** (gfx1201) | `GPU_ARCHS=gfx1201 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation` | `rocm` | wave32，与 NVIDIA warp32 语义一致 |
 | **RDNA3** (gfx1100) | `GPU_ARCHS=gfx1100 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation` | `rocm` | 同上 |
-| **CDNA3** (gfx942) | `GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@cdna3 --no-build-isolation` | `cdna3` | wave64 半wavefront模拟 |
+| **CDNA3** (gfx942) | `GPU_ARCHS=gfx942 pip install git+https://github.com/ZJLi2013/nvdiffrast.git@rocm --no-build-isolation` | `rocm` | wave64 半wavefront模拟 (统一分支) |
 
 ROCm Docker 推荐镜像：
 - `rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0` (CDNA3 推荐，有 flash-attn AMD wheel)
